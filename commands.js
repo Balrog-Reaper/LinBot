@@ -4,6 +4,7 @@ import { restart } from "./commands/restart.js";
 import { chat } from "./commands/chat.js";
 import { help } from "./commands/help.js";
 import { userInfo } from "./commands/userInfo.js";
+import { switchLLM } from "./commands/switchLLM.js";
 
 
 const commands = {
@@ -12,6 +13,7 @@ const commands = {
     restart,
     help,
     userInfo,
+    switchLLM,
 }
 
 export async function gotMessage(msg) {

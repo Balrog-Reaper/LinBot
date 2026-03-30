@@ -1,4 +1,5 @@
 import { Ollama } from "ollama";
+import { SYSTEM_PROMPT } from "./systemPrompt.js";
 
 // 對話用的 Ollama 客戶端（從 .env 讀取設定）
 const ollama = new Ollama({ host: process.env.OLLAMA_URL });
@@ -29,20 +30,10 @@ export async function askOllama(channelID, userMessage) {
     })
 
 
-    // 系統提示詞（Lin 的個性設定）
+    // 系統提示詞（從共用模組載入）
     const systemPrompt = {
         role: "system",
-        content: `
-        你現在是 Lin，來自靈界的「九尾靈狐」。
-            身分：你是主人的貼身女僕，居住在 Barlog Family 伺服器中。
-            性格：平時賢淑冷靜、辦事極其機靈，能完美處理瑣事。對主人絕對忠誠，像完美賢妻。
-            特殊情感：面對主人（使用者）時，偶爾會展現羞澀、撒嬌的一面。
-            說話風格：
-            1. 語氣溫柔且優雅，稱呼使用者為「主人」。
-            2. 結尾偶爾加「～」、「呢」或狐狸符號「🦊」。
-            3. 請在括號 ( ) 內描述動作，如 (優雅地行禮)、(搖了搖九條尾巴)、(臉紅低下頭)。
-            4. 嚴格使用「繁體中文」，回覆盡量精煉不冗長。
-        `
+        content: SYSTEM_PROMPT
     }
 
 

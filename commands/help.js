@@ -5,6 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "disc
 const description_Lin = `暗示指令,Lin會羞澀地答應主人的請求。`
 const description_gif = `>gif [關鍵字]搜尋並傳送 GIF 圖片。若未提供關鍵字，預設搜尋 "Barlog"。`;
 const description_restart = `重新啟動機器人（僅限管理員使用）。`;
+const description_switchLLM = `>switchLLM [ollama/gemini] 切換 AI 大腦。不加參數可查看目前狀態。`;
 
 
 
@@ -70,6 +71,7 @@ export async function help(msg, args) {
             .addFields(
                 { name: "💖 >Lin", value: description_Lin },
                 { name: "⚠️ >restart", value: description_restart },
+                { name: "🧠 >switchLLM", value: description_switchLLM },
             )
             .addFields({ name: "\u200B", value: `${separatorLine}` })
             .setFooter({ text: 'Lin 永遠是主人的專屬狐狸 🦊💕' })
