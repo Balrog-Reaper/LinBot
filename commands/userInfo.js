@@ -29,7 +29,6 @@ export async function userInfo(msg, args) {
         )
 
     try {
-        // 4. 以「私訊」方式傳送出去 (達成只有傳送者可看的條件)
         await msg.reply({ embeds: [embed] });
     } catch (error) {
         console.error("無法發送私訊給使用者:", error.message);

@@ -6,6 +6,7 @@ const description_Lin = `暗示指令,Lin會羞澀地答應主人的請求。`
 const description_gif = `>gif [關鍵字]搜尋並傳送 GIF 圖片。若未提供關鍵字，預設搜尋 "Barlog"。`;
 const description_restart = `重新啟動機器人（僅限管理員使用）。`;
 const description_switchLLM = `>switchLLM [ollama/gemini] 切換 AI 大腦。不加參數可查看目前狀態。`;
+const description_weather = `>weather [國家] [城市]查詢天氣狀況。例如：>weather 台灣 或 >weather 台灣 高雄。`;
 
 
 
@@ -43,7 +44,8 @@ export async function help(msg, args) {
             .setTitle("🌸 靈狐指令 - 公開區")
             .setDescription(`這些是伺服器裡的所有人都可以找 Lin 玩的指令喔!\n${separatorLine}`)
             .addFields(
-                { name: "✨ >gif", value: description_gif }, // 取用上方先定義好的變數 description_gif
+                { name: "✨ >gif", value: description_gif },
+                { name: "🌤️ >weather", value: description_weather },
             )
             .addFields({ name: "\u200B", value: `${separatorLine}` })
             .setFooter({ text: 'Lin 會幫大家找到有趣的圖片 🦊' })

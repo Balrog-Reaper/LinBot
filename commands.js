@@ -5,6 +5,7 @@ import { chat } from "./commands/chat.js";
 import { help } from "./commands/help.js";
 import { userInfo } from "./commands/userInfo.js";
 import { switchLLM } from "./commands/switchLLM.js";
+import { weather } from "./commands/weather.js";
 
 
 const commands = {
@@ -14,6 +15,7 @@ const commands = {
     help,
     userInfo,
     switchLLM,
+    weather,
 }
 
 export async function gotMessage(msg) {
