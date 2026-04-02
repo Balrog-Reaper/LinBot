@@ -1,4 +1,4 @@
-import { askLLM } from "../services/llmRouter.js";
+import { askLLM } from "../services/LLM/llmRouter.js";
 
 export async function chat(msg, userText) {
     // 顯示「Lin 正在輸入...」

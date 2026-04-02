@@ -1,4 +1,4 @@
-import { switchProvider, getCurrentProvider } from "../services/llmRouter.js";
+import { switchProvider, getCurrentProvider } from "../services/LLM/llmRouter.js";
 
 
 // 切換 LLM 提供者指令（僅限主人使用）
