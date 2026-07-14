@@ -65,3 +65,31 @@ export async function askGemini(channelID, userMessage) {
 export function clearGeminiHistory(channelId) {
     conversationHistory.delete(channelId);
 }
+
+
+/**
+ * 無狀態的單次 LLM 呼叫（不帶對話記憶）
+ * 適用於工具型任務，例如時間解析、摘要產生等
+ *
+ * @param {string} systemPrompt  系統提示詞
+ * @param {string} userMessage   使用者訊息
+ * @param {object} [options={}]  額外選項（temperature, jsonMode 等）
+ * @returns {Promise<string>}    回傳 AI 回覆的純文字
+ */
+export async function completeGemini(systemPrompt, userMessage, options = {}) {
+    const response = await ai.models.generateContent({
+        model: process.env.GEMINI_MODEL,
+        contents: [{
+            role: "user",
+            parts: [{ text: userMessage }]
+        }],
+        config: {
+            systemInstruction: systemPrompt,
+            temperature: options.temperature ?? 0.1,
+            ...(options.jsonMode ? { responseMimeType: "application/json" } : undefined),
+        }
+    });
+
+    const reply = response.text.trim();
+    return reply
+}

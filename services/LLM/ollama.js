@@ -72,3 +72,27 @@ export async function askOllama(channelID, userMessage) {
 export function clearHistory(channelId) {
     conversationHistory.delete(channelId);
 }
+
+
+/**
+ * 無狀態的單次 LLM 呼叫（不帶對話記憶）
+ * 適用於工具型任務，例如時間解析、摘要產生等
+ *
+ * @param {string} systemPrompt  系統提示詞
+ * @param {string} userMessage   使用者訊息
+ * @param {object} [options={}]  額外選項（temperature, jsonMode 等）
+ * @returns {Promise<string>}    回傳 AI 回覆的純文字
+ */
+export async function completeOllama(systemPrompt, userMessage, options = {}) {
+    const response = await ollama.chat({
+        model: process.env.OLLAMA_MODEL,
+        messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+        ],
+        stream: false,
+        ...(options.jsonMode && { format: "json" }),
+        temperature: options.temperature ?? 0.8,
+    });
+    return response.message.content.trim();
+}

@@ -1,0 +1,23 @@
+# 排除本地依賴
+node_modules/
+npm-debug.log
+
+# 排除環境變數與機密資訊
+.env
+.env.*
+*.pem
+*.key
+
+# 排除 Git 歷史
+.git/
+.gitignore
+.gitattributes
+
+# 排除開發測試草稿
+scratch/
+documents/
+
+# 排除 Dockerfile 本身與相關說明
+Dockerfile
+docker-compose.yml
+README.md

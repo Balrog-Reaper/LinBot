@@ -1,0 +1,26 @@
+services:
+  bot:
+    build: .
+    container_name: lin-bot
+    restart: always
+    environment:
+      - NODE_ENV=development
+      - BOTTOKEN=${BOTTOKEN}
+      - MONGODB_URI=mongodb://db:27017/lin-bot
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - db
+
+  db:
+    image: mongo:6-jammy
+    container_name: lin-bot-db
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+volumes:
+  mongo_data:

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { gotMessage } from "./commands.js";
+import { initScheduler } from "./services/scheduler/schedulerManager.js";
 
 
 /* API 的連線規格與監聽行為 */
@@ -23,9 +24,17 @@ const client = new Client({
 
 
 // 確認機器人已上線
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log("Beep beep");
     console.log(`✅ 機器人 ${client.user.username} 已上線！`);
+
+    // 初始化排程系統（Agenda + MongoDB）
+    try {
+        await initScheduler(client);
+        console.log("✅ 排程提醒系統已就緒");
+    } catch (error) {
+        console.error("❌ 排程系統初始化失敗：", error.message);
+    }
 });
 
 
