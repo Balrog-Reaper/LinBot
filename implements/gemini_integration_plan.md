@@ -71,7 +71,7 @@ LinBot 已透過 `ollama_ai_integration_plan.md` 成功整合本地端 Ollama �
 
 ## 🧩 核心模組說明
 
-### `services/gemini.js`
+### `services/LLM/gemini.js`
 
 ```js
 import { GoogleGenAI } from "@google/genai";
@@ -80,10 +80,14 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function askGemini(channelID, userMessage) {
     // 1. 管理 conversationHistory（Map，以頻道 ID 為 key）
-    // 2. 建構 contents 陣列（包含歷史對話）
+    // 2. 建構 contents 陣列（包含歷史對話，確保 user/model 交替）
     // 3. 呼叫 ai.models.generateContent() 並傳入 systemInstruction
     // 4. 儲存回覆至記憶，超過 MAX_HISTORY 則裁切
     // 5. 回傳 response.text
+}
+
+export async function completeGemini(systemPrompt, userMessage, options = {}) {
+    // 無狀態的單次呼叫，支援 options.jsonMode (強制 responseMimeType 為 application/json)
 }
 
 export function clearGeminiHistory(channelId) { ... }
@@ -99,7 +103,7 @@ export function clearGeminiHistory(channelId) { ... }
 
 ---
 
-### `services/llmRouter.js`
+### `services/LLM/llmRouter.js`
 
 ```js
 let currentProvider = process.env.LLM_PROVIDER || "ollama";
@@ -109,7 +113,13 @@ const providers = {
     gemini: askGemini,
 };
 
+const completionProviders = {
+    ollama: completeOllama,
+    gemini: completeGemini,
+};
+
 export async function askLLM(channelID, userMessage) { ... }
+export async function completeLLM(systemPrompt, userMessage, options = {}) { ... }
 export function switchProvider(providerName) { ... }
 export function getCurrentProvider() { ... }
 ```

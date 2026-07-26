@@ -53,12 +53,12 @@
 ### 🔧 修改檔案
 
 #### `commands.js`
-- **修改**：原先只處理 `!` 開頭的指令，現追加 `else` 分支：非指令文字一律送到新的 `chat()` 函式處理。
+- **修改**：原先只處理 `>` 開頭的指令，現追加 `else` 分支：非指令文字一律送到新的 `chat()` 函式處理。
 
 ```diff
 // 正式辨識指令並執行
 try {
-    if (command.charAt(0) === "!") {
+    if (command.charAt(0) === ">") {
         command = command.substring(1);
         commands[command](msg, tokens);
 +   } else {
@@ -79,75 +79,78 @@ import { chat } from "./commands/chat.js";
 ---
 
 #### `commands/Lin.js`（可選優化）
-- 目前 `!Lin` 指令仍保留固定問候，維持不變。
-- 未來可考慮讓 `!Lin` 也走 AI 對話。
+- 目前 `>Lin` 指令仍保留固定問候，維持不變。
+- 未來可考慮讓 `>Lin` 也走 AI 對話。
 
 ---
 
 ### 🆕 新增檔案
 
-#### `services/ollama.js`
-封裝與 Ollama API 的溝通邏輯。
+#### `services/LLM/ollama.js`
+封裝與 Ollama API 的溝通邏輯，引入官方 `ollama` SDK，支援對話與單次完成 API。
 
 ```js
-// services/ollama.js
+// services/LLM/ollama.js
+import { Ollama } from "ollama";
+import { SYSTEM_PROMPT } from "./systemPrompt.js";
 
-const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
-const MODEL = process.env.OLLAMA_MODEL || "qwen3:8b";
+const ollama = new Ollama({ host: process.env.OLLAMA_URL });
 
 // 對話記憶（依頻道 ID 儲存，最多保留 N 輪）
 const conversationHistory = new Map();
 const MAX_HISTORY = 10; // 最多保留 10 輪對話
 
 export async function askOllama(channelId, userMessage) {
-    // 取得此頻道的對話記憶
     if (!conversationHistory.has(channelId)) {
         conversationHistory.set(channelId, []);
     }
     const history = conversationHistory.get(channelId);
 
-    // 加入使用者訊息
     history.push({ role: "user", content: userMessage });
 
-    // 系統提示詞（Lin 的個性設定）
     const systemPrompt = {
         role: "system",
-        content: `你是 Lin，一個活潑、親切、有點毒舌但本質善良的女僕機器人。
-你服務於 Barlog Family Discord 伺服器，主人是伺服器的管理員。
-你的回覆風格：簡短（不超過 100 字）、口語化、偶爾加入表情符號。
-請用繁體中文回覆。`
+        content: SYSTEM_PROMPT
     };
 
-    // 呼叫 Ollama API
-    const response = await fetch(`${OLLAMA_URL}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            model: MODEL,
+    try {
+        const response = await ollama.chat({
+            model: process.env.OLLAMA_MODEL,
             messages: [systemPrompt, ...history],
-            stream: false
-        })
-    });
+            stream: false,
+            temperature: 0.8
+        });
 
-    if (!response.ok) {
-        throw new Error(`Ollama API 回應錯誤：${response.status}`);
+        const reply = response.message.content;
+        history.push({ role: "assistant", content: reply });
+
+        if (history.length > MAX_HISTORY * 2) {
+            history.splice(0, 2);
+        }
+
+        return reply;
+    } catch (error) {
+        console.error("❌ Ollama 發生錯誤：", error.message);
+        return "抱歉，我的大腦暫時當機了...請稍後再試 😵";
     }
-
-    const data = await response.json();
-    const reply = data.message.content;
-
-    // 儲存 AI 回覆進記憶
-    history.push({ role: "assistant", content: reply });
-
-    // 超過上限則移除最舊的一輪（移除最早的 user + assistant 各一則）
-    if (history.length > MAX_HISTORY * 2) {
-        history.splice(0, 2);
-    }
-
-    return reply;
 }
 
-// 清除特定頻道的對話記憶
+export async function completeOllama(systemPrompt, userMessage, options = {}) {
+    // 無狀態的單次呼叫，支援 options.jsonMode (強制 format 為 json)
+    const response = await ollama.chat({
+        model: process.env.OLLAMA_MODEL,
+        messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+        ],
+        stream: false,
+        temperature: options.temperature ?? 0.8,
+        ...(options.jsonMode ? { format: "json" } : undefined),
+    });
+
+    return response.message.content.trim();
+}
+
 export function clearHistory(channelId) {
     conversationHistory.delete(channelId);
 }
@@ -156,21 +159,20 @@ export function clearHistory(channelId) {
 ---
 
 #### `commands/chat.js`
-新增 `chat` 指令，作為 AI 對話的入口。
+新增 `chat` 指令，作為 AI 對話的入口（改走 `askLLM` 路由，而非直接呼叫 `askOllama`）。
 
 ```js
 // commands/chat.js
-import { askOllama } from "../services/ollama.js";
+import { askLLM } from "../services/LLM/llmRouter.js";
 
 export async function chat(msg, userText) {
-    // 顯示「Lin 正在輸入...」
     await msg.channel.sendTyping();
 
     try {
-        const reply = await askOllama(msg.channel.id, userText);
+        const reply = await askLLM(msg.channel.id, userText);
         await msg.reply(reply);
     } catch (error) {
-        console.error("❌ Ollama 發生錯誤：", error.message);
+        console.error("❌ LLM Router 發生錯誤：", error.message);
         await msg.reply("抱歉，我的大腦暫時當機了...請稍後再試 😵");
     }
 }

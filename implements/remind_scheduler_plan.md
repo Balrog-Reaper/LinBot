@@ -344,16 +344,14 @@ export async function remind(msg, args) {
 - **直接呼叫 Ollama API**（而非透過 llmRouter），因為時間解析需要獨立的 System Prompt，與角色扮演的對話 Prompt 完全不同
 
 ```js
-import { Ollama } from "ollama";
-
-const ollama = new Ollama({ host: process.env.OLLAMA_URL });
+import { completeLLM } from "../LLM/llmRouter.js";
 
 // 時間解析專用的 System Prompt
 const TIME_PARSER_PROMPT = `你是一個精確的時間解析器，你的唯一任務是將使用者的口語化時間描述轉換為標準時間格式。
 
 規則：
 1. 參考「當前時間」來計算目標時間
-2. 所有時間一律轉換為 UTC 標準時間（注意：當前時間為 UTC+8，請正確計算時差）
+2. 所有時間一律轉換為 UTC 標準時間（注意：當前時間字串中已包含時區偏移量，請據此正確計算時差）
 3. 從使用者輸入中分離「時間描述」與「提醒事項」
 4. 僅回傳 JSON，不要包含任何額外文字、說明或 markdown 格式
 5. JSON 格式：{"time": "YYYY-MM-DDTHH:mm:ss.000Z", "task": "提醒事項"}
@@ -365,15 +363,45 @@ const TIME_PARSER_PROMPT = `你是一個精確的時間解析器，你的唯一�
 
 
 /**
- * 取得當前台灣時間的格式化字串（UTC+8）
+ * 取得指定時區的當前格式化時間
  * @returns {string} 例如 "2026-04-06T22:30:00+08:00 (星期一)"
  */
-function getCurrentTaiwanTime() {
-    const now = new Date();
-    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    const dayNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-    const dayName = dayNames[taiwanTime.getUTCDay()];
-    return `${taiwanTime.toISOString().replace("Z", "+08:00")} (${dayName})`;
+function getCurrentFormattedTime() {
+    const timeZone = process.env.TIMEZONE || "Asia/Taipei";
+    const currentTime = new Date();
+
+    // 使用 Intl.DateTimeFormat 格式化成指定時區的時間
+    const formatter = new Intl.DateTimeFormat("zh-TW", {
+        timeZone: timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+        weekday: "long"
+    });
+
+    // 取得該時區的時間 components
+    const parts = formatter.formatToParts(currentTime);
+    const getVal = (type) => parts.find(p => p.type === type).value;
+    const year = getVal("year");
+    const month = getVal("month");
+    const day = getVal("day");
+    const hour = getVal("hour");
+    const minute = getVal("minute");
+    const second = getVal("second");
+    const weekday = getVal("weekday");
+
+    // 取得該時區的時差偏移量 (例如 +08:00 或 -04:00)
+    const tzString = currentTime.toLocaleString("en-US", { timeZone, timeZoneName: "longOffset" });
+    const offset = tzString.split("GMT")[1] || "+00:00";
+    const formattedOffset = offset.includes(":") ? offset : (offset.startsWith("-") ? "-" : "+") + String(Math.abs(parseInt(offset))).padStart(2, "0") + ":00";
+    const formattedTime = `${year}-${month}-${day}T${hour}:${minute}:${second}${formattedOffset} (${weekday})`;
+
+    console.log("現在時間：" + formattedTime);
+    return formattedTime;
 }
 
 
@@ -384,39 +412,24 @@ function getCurrentTaiwanTime() {
  * @returns {Promise<{time: string, task: string} | null>} 解析結果，或 null 表示解析失敗
  */
 export async function parseTimeWithLLM(rawInput) {
-    const currentTime = getCurrentTaiwanTime();
-
+    const currentTime = getCurrentFormattedTime();
     const userMessage = `當前時間：${currentTime}\n使用者輸入：「${rawInput}」`;
 
     try {
-        const response = await ollama.chat({
-            model: process.env.OLLAMA_MODEL,
-            messages: [
-                { role: "system", content: TIME_PARSER_PROMPT },
-                { role: "user",   content: userMessage },
-            ],
-            stream: false,
-            format: "json",       // 強制 Ollama 回傳 JSON 格式
+        // 透過 LLM 路由器呼叫當前 provider（不需要知道底層用的是哪個 LLM）
+        const text = await completeLLM(TIME_PARSER_PROMPT, userMessage, {
             temperature: 0.1,     // 低溫度 → 精確穩定的結果
+            jsonMode: true,       // 強制回傳 JSON 格式
         });
+        const parsedData = JSON.parse(text);
 
-        const text = response.message.content.trim();
-
-        // 嘗試解析 JSON（容錯：移除可能的 markdown code block 標記）
-        const cleanText = text
-            .replace(/^```json?\s*/i, "")
-            .replace(/\s*```$/,        "")
-            .trim();
-
-        const parsed = JSON.parse(cleanText);
-
-        // 驗證必要欄位
-        if (!parsed.time || !parsed.task) {
-            console.error("❌ LLM 回傳的 JSON 缺少必要欄位：", parsed);
+        // 檢查是否有缺少必要欄位
+        if (!parsedData.time || !parsedData.task) {
+            console.error("❌ LLM 回傳的 JSON 缺少必要欄位：", parsedData);
             return null;
         }
 
-        return parsed;
+        return parsedData;
 
     } catch (error) {
         console.error("❌ 時間解析失敗：", error.message);
@@ -425,14 +438,11 @@ export async function parseTimeWithLLM(rawInput) {
 }
 ```
 
-> ⚠️ **設計決策：為何不走 `llmRouter.js`？**
+> 💡 **設計決策：走 `llmRouter.js` 的 `completeLLM()`**
 >
-> `llmRouter.js` 是為「角色對話」設計的，它會自動注入 Lin 的九尾狐女僕人設 System Prompt。
-> 但時間解析需要**完全不同的 System Prompt**（精準的 JSON 格式解析器），
-> 兩者的場景截然不同，因此 `timeParser.js` 直接建立獨立的 Ollama 連線。
->
-> 若未來需要支援 Gemini 做時間解析，可以在此模組內部加入切換邏輯，
-> 或者在 `llmRouter.js` 新增一個 `askLLMRaw(systemPrompt, userMessage)` 通用介面。
+> 為了統一管理 AI 大腦，時間解析也透過 `llmRouter.js` 呼叫 `completeLLM()` 介面。
+> 該介面為無狀態的單次呼叫，不保留對話記憶，但能注入專屬的 System Prompt。
+> 這讓 `timeParser.js` 也能享受到 Provider 自動切換的好處，不需要硬寫特定 SDK 連線！
 
 ---
 
@@ -777,21 +787,24 @@ export function buildReminderMessage(userId, content) {
  * @returns {string} 確認訊息
  */
 export function formatConfirmMessage(task, scheduledDate) {
-    // 轉換為台灣時間顯示（UTC+8）
-    const taiwanTime = new Date(scheduledDate.getTime() + (8 * 60 * 60 * 1000));
-    const formatted = taiwanTime.toLocaleString("zh-TW", {
+    // 使用 .env 中設定的時區來顯示，預設為台北時區
+    const timeZone = process.env.TIMEZONE || "Asia/Taipei";
+    const formatted = scheduledDate.toLocaleString("zh-TW", {
+        timeZone: timeZone,
         year: "numeric", month: "2-digit", day: "2-digit",
         hour: "2-digit", minute: "2-digit",
         hour12: false,
     });
 
-    return (
+    const reply = (
         `✅ (拿出小本本認真記下) Lin 記住了！🦊\n\n` +
         `📌 **提醒事項**：${task}\n` +
         `⏰ **預定時間**：${formatted}\n` +
         `📨 **提醒方式**：私訊 (DM)\n\n` +
         `Lin 會悄悄私訊提醒主人的，請放心～ 💌✨`
-    );
+    )
+
+    return reply;
 }
 
 
@@ -803,6 +816,8 @@ export function formatConfirmMessage(task, scheduledDate) {
  * @returns {EmbedBuilder} Embed 物件
  */
 export function formatReminderListEmbed(reminders, username) {
+    // 使用 .env 中設定隨時區顯示，預設為台北時區
+    const timeZone = process.env.TIMEZONE || "Asia/Taipei";
     const embed = new EmbedBuilder()
         .setTitle(`📋 ${username} 的待執行提醒`)
         .setColor(0xE67E22)
@@ -817,9 +832,9 @@ export function formatReminderListEmbed(reminders, username) {
     embed.setDescription(`共有 **${reminders.length}** 個待執行提醒：`);
 
     for (const r of reminders) {
-        // 轉換為台灣時間顯示
-        const taiwanTime = new Date(new Date(r.scheduledAt).getTime() + (8 * 60 * 60 * 1000));
-        const formatted = taiwanTime.toLocaleString("zh-TW", {
+        // 使用 .env 中的時區格式化顯示
+        const formatted = new Date(r.scheduledAt).toLocaleString("zh-TW", {
+            timeZone: timeZone,
             month: "2-digit", day: "2-digit",
             hour: "2-digit", minute: "2-digit",
             hour12: false,

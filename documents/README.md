@@ -63,8 +63,8 @@
 
 ```
 LinBot/
-├── index.js              # 主程式進入點，建立 Discord Client 並監聽事件
-├── commands.js           # 指令路由中樞，解析訊息並分派至對應指令
+├── index.js              # 主程式進入點，建立 Discord Client 並監聽事件，初始化 Agenda 排程器
+├── commands.js           # 指令路由中樞，解析訊息並分派至對應指令，新增私訊 (DM) 路由
 ├── commands/             # 指令模組目錄
 │   ├── Lin.js            # >Lin — 靈狐問候指令 (主人專屬)
 │   ├── gif.js            # >gif — GIF 搜尋指令
@@ -72,12 +72,21 @@ LinBot/
 │   ├── help.js           # >help — 互動式多頁面說明選單
 │   ├── restart.js        # >restart — 機器人重啟指令 (主人專屬)
 │   ├── userInfo.js       # >userInfo — 使用者資訊查詢
-│   └── switchLLM.js      # >switchLLM — 切換 LLM 提供者 (主人專屬)
+│   ├── switchLLM.js      # >switchLLM — 切換 LLM 提供者 (主人專屬)
+│   └── remind.js         # >remind — 排程提醒指令（含 list/cancel 子指令，主人專屬）
+├── databases/            # 資料庫層
+│   └── mongodb.js        # MongoDB 資料庫連線管理器（單例模式）
 ├── services/             # 服務層
 │   ├── systemPrompt.js   # 共用系統提示詞 (Lin 的角色設定)
-│   ├── ollama.js         # Ollama AI 對話服務 (含記憶管理)
-│   ├── gemini.js         # Gemini AI 對話服務 (含記憶管理)
-│   └── llmRouter.js      # LLM 路由管理器 (切換 Ollama/Gemini)
+│   ├── LLM/              # AI 大腦模組
+│   │   ├── gemini.js     # Gemini AI 對話服務與單次生成 API
+│   │   ├── ollama.js     # Ollama AI 對話服務與單次生成 API
+│   │   └── llmRouter.js  # LLM 路由管理器 (切換與路由對話/生成)
+│   └── scheduler/        # 排程提醒模組
+│       ├── schedulerManager.js # Agenda 排程引擎封裝與 API
+│       ├── timeParser.js       # NLP 口語時間解析器 (呼叫 LLM)
+│       ├── jobDefinitions.js   # Agenda 任務行為定義 (發送 DM 私訊)
+│       └── reminderTemplates.js # 女僕風格提醒訊息模板 (含時區格式化)
 ├── implements/           # 功能實作規劃文件
 ├── documents/            # 文件與說明書
 ├── .env                  # 環境變數設定 (不納入版控)
@@ -139,6 +148,12 @@ GEMINI_MODEL=gemini-2.5-flash
 
 # 預設 LLM 提供者 (ollama / gemini)
 LLM_PROVIDER=ollama
+
+# MongoDB 設定
+MONGODB_URI=mongodb://db:27017/lin-bot
+
+# 系統時區 (例如 Asia/Taipei)
+TIMEZONE=Asia/Taipei
 ```
 
 ### 4. 啟動 Ollama 服務
@@ -184,6 +199,7 @@ Beep beep
 | `>Lin` | `@Lin >Lin` | Lin 會羞澀地回應主人的招喚 |
 | `>restart` | `@Lin >restart` | 重新啟動機器人 (僅限管理員) |
 | `>switchLLM` | `@Lin >switchLLM [ollama/gemini]` | 切換 AI 大腦，不加參數可查看目前狀態 |
+| `>remind` | `@Lin >remind [口語時間] [事項]`<br>`@Lin >remind list`<br>`@Lin >remind cancel [編號]` | 排程提醒系統。時間到時會透過私訊 (DM) 悄悄提醒主人。支援私訊直接輸入指令（不需標註 @Lin，完全隱密，如：`>remind list`） |
 
 ### 💬 AI 自由對話
 
@@ -245,6 +261,9 @@ Ollama 的回應速度取決於你的硬體規格與使用的模型大小。建�
 | `node-fetch` | ^3.3.2 | HTTP 請求工具 |
 | `ollama` | ^0.6.3 | Ollama AI 客戶端 |
 | `@google/genai` | ^1.47.0 | Google Gemini AI SDK |
+| `agenda` | ^6.2.4 | 基於 MongoDB 的定時任務與非同步工作排程器 |
+| `mongodb` | ^7.1.1 | MongoDB 官方資料庫驅動程式 |
+| `@agendajs/mongo-backend` | ^4.0.1 | Agenda 的 MongoDB 後端儲存庫連線器 |
 
 ---
 

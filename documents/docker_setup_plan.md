@@ -19,14 +19,14 @@
 ## 📂 檔案配置設計
 
 ### 1. Dockerfile
-建立生產環境的 Docker 映像檔定義檔。
+建立本地開發與生產環境的 Docker 映像檔定義檔。
 
 ```dockerfile
 # 使用官方 Node.js 20 輕量 Alpine 映像檔
 FROM node:20-alpine AS base
 
-# 設定環境變數
-ENV NODE_ENV=production
+# 設定環境變數為開發模式
+ENV NODE_ENV=development
 
 # 建立工作目錄
 WORKDIR /usr/src/app
@@ -34,9 +34,8 @@ WORKDIR /usr/src/app
 # 先複製 package*.json 用於快取依賴安裝
 COPY package*.json ./
 
-# 安裝生產環境依賴 (排除 devDependencies)
-# 使用 ci 指令確保依賴版本與 package-lock.json 完全一致
-RUN npm ci --only=production
+# 安裝所有依賴套件（包含開發用的套件）
+RUN npm install
 
 # 複製其餘的專案檔案
 COPY . .
@@ -81,20 +80,22 @@ README.md
 ```
 
 ### 3. docker-compose.yml (選用本地測試用)
-為了讓本地測試更方便，可建立 `docker-compose.yml`，同時配置機器人與 MongoDB 的安全網路連線。
+為了讓本地測試更方便，可建立 `docker-compose.yml`，同時配置機器人與 MongoDB 的安全網路連線。並且透過掛載本地目錄及使用 `nodemon -L` 實作熱重載開發。
 
 ```yaml
-version: '3.8'
-
 services:
   bot:
     build: .
     container_name: lin-bot
     restart: always
     environment:
+      - NODE_ENV=development
       - BOTTOKEN=${BOTTOKEN}
       - MONGODB_URI=mongodb://db:27017/lin-bot
-      # 如果有其他環境變數，可以在此傳遞
+    command: npx nodemon -L index.js
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
     depends_on:
       - db
 
