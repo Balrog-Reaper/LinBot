@@ -16,8 +16,10 @@ npm-debug.log
 # 排除開發測試草稿
 scratch/
 documents/
+implements/
+test/
 
 # 排除 Dockerfile 本身與相關說明
 Dockerfile
 docker-compose.yml
-README.md
+.dockerignore
