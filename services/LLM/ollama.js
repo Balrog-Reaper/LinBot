@@ -91,8 +91,10 @@ export async function completeOllama(systemPrompt, userMessage, options = {}) {
             { role: "user", content: userMessage },
         ],
         stream: false,
-        ...(options.jsonMode && { format: "json" }),
         temperature: options.temperature ?? 0.8,
+        ...(options.jsonMode ? { format: "json" } : undefined),
     });
-    return response.message.content.trim();
-}
+
+    const reply = response.message.content.trim();
+    return reply;
+}

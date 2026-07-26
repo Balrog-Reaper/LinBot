@@ -1,3 +1,4 @@
+
 import { EmbedBuilder } from "discord.js";
 
 
@@ -33,14 +34,40 @@ export function buildReminderEmbed(content) {
 
 
 /**
- * 建構頻道降級提醒訊息（DM 失敗時的備用方案）
+ * 建構私訊屏蔽降級通知（每次重試時發送至頻道）
  *
- * @param {string} userId  - 使用者 Discord ID
- * @param {string} content - 提醒內容
- * @returns {string} 完整的提醒訊息字串
+ * @param {string} userId     - 使用者 Discord ID
+ * @param {string} content    - 提醒內容
+ * @param {number} attempt    - 目前是第幾次重試
+ * @param {number} maxRetries - 最大重試次數
+ * @returns {string} 完整的頻道通知訊息
  */
-export function buildReminderMessage(userId, content) {
-    return `<@${userId}> 主人！Lin 想私訊提醒您但被擋住了…😿\n所以在這裡提醒您～\n\n📌 **提醒事項**：${content}`;
+export function buildDmBlockedNotice(userId, content, attempt, maxRetries) {
+    return (
+        `<@${userId}> 主人，您目前開啟了私訊屏蔽，Lin 無法私訊提醒您 😿\n` +
+        `所以先在這裡告知您～\n\n` +
+        `📌 **提醒事項**：${content}\n` +
+        `🔄 **重試狀態**：第 ${attempt}/${maxRetries} 次（Lin 會在 10 分鐘後再次嘗試私訊）\n\n` +
+        `💡 請開啟私訊權限，Lin 才能悄悄提醒主人喔～`
+    );
+}
+
+
+/**
+ * 建構私訊屏蔽放棄通知（達到最大重試次數後發送至頻道）
+ *
+ * @param {string} userId       - 使用者 Discord ID
+ * @param {string} content      - 提醒內容
+ * @param {number} totalRetries - 已重試的總次數
+ * @returns {string} 完整的放棄通知訊息
+ */
+export function buildDmGiveUpNotice(userId, content, totalRetries) {
+    return (
+        `<@${userId}> 主人，Lin 已經嘗試了 ${totalRetries} 次私訊提醒，但都被屏蔽了…😢\n\n` +
+        `📌 **提醒事項**：${content}\n` +
+        `❌ **狀態**：此提醒任務已結束，不再重試。\n\n` +
+        `如需重新設定提醒，請使用 \`>remind\` 指令，並記得開啟私訊權限喔～ 🦊`
+    );
 }
 
 
@@ -52,21 +79,27 @@ export function buildReminderMessage(userId, content) {
  * @returns {string} 確認訊息
  */
 export function formatConfirmMessage(task, scheduledDate) {
-    // 轉換為台灣時間顯示（UTC+8）
-    const taiwanTime = new Date(scheduledDate.getTime() + (8 * 60 * 60 * 1000));
-    const formatted = taiwanTime.toLocaleString("zh-TW", {
-        year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit",
+    // 使用 .env 中設定的時區來顯示，預設為台北時區
+    const timeZone = process.env.TIMEZONE || "Asia/Taipei";
+    const formatted = scheduledDate.toLocaleString("zh-TW", {
+        timeZone: timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
         hour12: false,
     });
 
-    return (
+    const reply = (
         `✅ (拿出小本本認真記下) Lin 記住了！🦊\n\n` +
         `📌 **提醒事項**：${task}\n` +
         `⏰ **預定時間**：${formatted}\n` +
         `📨 **提醒方式**：私訊 (DM)\n\n` +
         `Lin 會悄悄私訊提醒主人的，請放心～ 💌✨`
-    );
+    )
+
+    return reply;
 }
 
 
@@ -78,6 +111,8 @@ export function formatConfirmMessage(task, scheduledDate) {
  * @returns {EmbedBuilder} Embed 物件
  */
 export function formatReminderListEmbed(reminders, username) {
+    // 使用 .env 中設定的時區來顯示，預設為台北時區
+    const timeZone = process.env.TIMEZONE || "Asia/Taipei";
     const embed = new EmbedBuilder()
         .setTitle(`📋 ${username} 的待執行提醒`)
         .setColor(0xE67E22)
@@ -93,7 +128,7 @@ export function formatReminderListEmbed(reminders, username) {
 
     for (const r of reminders) {
         // 轉換為台灣時間顯示
-        const taiwanTime = new Date(new Date(r.scheduledAt).getTime() + (8 * 60 * 60 * 1000));
+        const taiwanTime = new Date(new Date(r.scheduledAt).getTime() + (8 * 60 * 60 * 1000)); // 需要修改成可彈性化時間
         const formatted = taiwanTime.toLocaleString("zh-TW", {
             month: "2-digit", day: "2-digit",
             hour: "2-digit", minute: "2-digit",

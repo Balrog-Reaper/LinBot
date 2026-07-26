@@ -12,19 +12,27 @@ let db = null;
  * 取得 MongoDB 連線（單例模式）
  * 若尚未連線則自動建立，已連線則直接回傳
  *
- * @param {string} [dbName="lin-bot"] - 資料庫名稱
+ * @param {string} [dbName=MONGODB_DB_NAME] - 資料庫名稱
  * @returns {Promise<{client: MongoClient, db: import('mongodb').Db}>}
  */
-export async function getMongoConnection(dbName = "lin-bot") {
+export async function getMongoConnection(dbName = process.env.MONGODB_DB_NAME) {
+
+    // 若已連線則直接回傳
     if (client && db) {
         return { client, db };
     }
 
-    const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
+    // 建立 MongoDB 連線
+    const uri = process.env.MONGODB_URI;
 
+    // 第一次連線：建立連線並將連線資訊回傳
     try {
+
+        // 建立 Client 實例並連線
         client = new MongoClient(uri);
         await client.connect();
+
+        // 取得指定資料庫的實例
         db = client.db(dbName);
 
         console.log(`✅ MongoDB 已連線：${uri} / ${dbName}`);

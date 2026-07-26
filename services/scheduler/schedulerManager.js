@@ -1,7 +1,16 @@
 import { Agenda } from "agenda";
 import { MongoBackend } from "@agendajs/mongo-backend";
-import { getMongoConnection, closeMongoConnection } from "../../databases/mongodb.js";
+
+// 引入任務定義模組
 import { defineAllJobs } from "./jobDefinitions.js";
+
+// 引入 MongoDB 連線模組
+import {
+    getMongoConnection,
+    closeMongoConnection
+} from "../../databases/mongodb.js";
+
+
 
 
 // ═══════════════════════════════════════════
@@ -18,25 +27,27 @@ let agenda = null;
  */
 export async function initScheduler(client) {
     try {
-        // 從集中式資料庫連線層取得 MongoDB 連線
-        const { db } = await getMongoConnection("lin-bot");
+
+        // 1.從集中式資料庫連線層取得 MongoDB 連線
+        const { db } = await getMongoConnection(process.env.MONGODB_DATABASE_NAME);
 
         agenda = new Agenda({
-            backend: new MongoBackend({ mongo: db }),
+            backend: new MongoBackend({ mongo: db, collection: process.env.MONGODB_COLLECTION_REMINDER }),
             defaultConcurrency: 5,       // 同時最多處理 5 個任務
             maxConcurrency: 20,          // 全域最大並行數
             processEvery: "30 seconds",  // 每 30 秒輪詢一次 MongoDB
         });
 
-        // 載入所有任務定義（傳入 Discord client 供發送訊息用）
+        // 2.載入所有任務定義（傳入 Discord client 供發送訊息用）
         defineAllJobs(agenda, client);
 
-        // 啟動排程器
+        // 3.啟動排程器
         await agenda.start();
         console.log("✅ Agenda 排程器已啟動");
 
-        // 優雅關機處理
-        const gracefulShutdown = async () => {
+
+        // 關機處理
+        const shutdown = async () => {
             console.log("⏳ 正在停止排程系統...");
             await agenda.stop();
             await closeMongoConnection();
@@ -44,8 +55,9 @@ export async function initScheduler(client) {
             process.exit(0);
         };
 
-        process.on("SIGTERM", gracefulShutdown);
-        process.on("SIGINT",  gracefulShutdown);
+        process.on("SIGTERM", shutdown); // 監聽系統關閉訊號（如：Docker 容器停止、伺服器重新部署）
+        process.on("SIGINT", shutdown); // 監聽中斷訊號（如：終端機按下 Ctrl + C 結束程式）
+
 
     } catch (error) {
         console.error("❌ Agenda 初始化失敗：", error.message);
@@ -79,6 +91,7 @@ export async function scheduleReminder(scheduledDate, data) {
  * @returns {Promise<Array>} 待執行的提醒列表
  */
 export async function getUserReminders(userId) {
+
     if (!agenda) throw new Error("排程器尚未初始化");
 
     const jobs = await agenda.jobs({
@@ -87,12 +100,15 @@ export async function getUserReminders(userId) {
         nextRunAt: { $ne: null },    // 尚未執行的任務
     });
 
+
+
+
     return jobs.map((job, index) => ({
         index: index + 1,
-        content:     job.attrs.data.content,
+        content: job.attrs.data.content,
         scheduledAt: job.attrs.nextRunAt,
-        createdAt:   job.attrs.data.createdAt,
-        jobId:       job.attrs._id,
+        createdAt: job.attrs.data.createdAt,
+        jobId: job.attrs._id,
     }));
 }
 
@@ -105,6 +121,7 @@ export async function getUserReminders(userId) {
  * @returns {Promise<{success: boolean, message: string, content?: string}>}
  */
 export async function cancelReminder(userId, index) {
+
     if (!agenda) throw new Error("排程器尚未初始化");
 
     const reminders = await getUserReminders(userId);

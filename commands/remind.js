@@ -1,9 +1,14 @@
+// 引入時間解析模組
 import { parseTimeWithLLM } from "../services/scheduler/timeParser.js";
+
+// 引入排程管理模組
 import {
     scheduleReminder,
     getUserReminders,
     cancelReminder
 } from "../services/scheduler/schedulerManager.js";
+
+// 引入提醒訊息範本模組
 import {
     formatConfirmMessage,
     formatReminderListEmbed,
@@ -81,16 +86,17 @@ export async function remind(msg, args) {
     const rawInput = args.join(" "); // 將所有參數合併為原始字串
 
     try {
-        // Step 1：呼叫 LLM 解析時間
-        const parsed = await parseTimeWithLLM(rawInput);
 
-        if (!parsed || !parsed.time || !parsed.task) {
+        // Step 1：呼叫 LLM 解析時間
+        const parsedData = await parseTimeWithLLM(rawInput);
+
+        if (!parsedData || !parsedData.time || !parsedData.task) {
             await msg.reply(formatErrorMessage("Lin 無法理解這個時間描述，請換個方式說說看？"));
             return;
         }
 
         // Step 2：驗證解析出的時間是否為未來時間
-        const scheduledDate = new Date(parsed.time);
+        const scheduledDate = new Date(parsedData.time);
         if (isNaN(scheduledDate.getTime())) {
             await msg.reply(formatErrorMessage("LLM 回傳了無效的時間格式，請重試一次"));
             return;
@@ -102,16 +108,16 @@ export async function remind(msg, args) {
 
         // Step 3：將任務送入 Agenda 排程
         const jobData = {
-            userId:    msg.author.id,
+            userId: msg.author.id,
             channelId: msg.channel.id,
-            content:   parsed.task,
+            content: parsedData.task,
             createdAt: new Date().toISOString(),
         };
 
         await scheduleReminder(scheduledDate, jobData);
 
         // Step 4：回覆確認訊息
-        await msg.reply(formatConfirmMessage(parsed.task, scheduledDate));
+        await msg.reply(formatConfirmMessage(parsedData.task, scheduledDate));
 
     } catch (error) {
         console.error("❌ 排程提醒錯誤：", error.message);

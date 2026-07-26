@@ -1,3 +1,5 @@
+
+// 引入 LLM 路由器模組
 import { completeLLM } from "../LLM/llmRouter.js";
 
 // 時間解析專用的 System Prompt
@@ -52,8 +54,6 @@ function getCurrentFormattedTime() {
         { type: "weekday", value: "星期日" }
     ];
     */
-
-
     // 透過 components 取得該時區的年、月、日、時、分、秒、星期
     const getVal = (type) => parts.find(p => p.type === type).value;
     const year = getVal("year");
@@ -68,12 +68,13 @@ function getCurrentFormattedTime() {
     // 取得該時區的時差偏移量 (例如 +08:00 或 -04:00)
     const tzString = currentTime.toLocaleString("en-US", { timeZone, timeZoneName: "longOffset" });
     const offset = tzString.split("GMT")[1] || "+00:00";
-
-    console.log(tzString.split("GMT"));
-
     const formattedOffset = offset.includes(":") ? offset : (offset.startsWith("-") ? "-" : "+") + String(Math.abs(parseInt(offset))).padStart(2, "0") + ":00";
+    const formattedTime = `${year}-${month}-${day}T${hour}:${minute}:${second}${formattedOffset} (${weekday})`
 
-    return `${year}-${month}-${day}T${hour}:${minute}:${second}${formattedOffset} (${weekday})`;
+    // 檢查用
+    console.log("現在時間：" + formattedTime);
+
+    return formattedTime;
 }
 
 
@@ -93,22 +94,15 @@ export async function parseTimeWithLLM(rawInput) {
             temperature: 0.1,     // 低溫度 → 精確穩定的結果
             jsonMode: true,       // 強制回傳 JSON 格式
         });
+        const parsedData = JSON.parse(text);
 
-        // 嘗試解析 JSON（容錯：移除可能的 markdown code block 標記）
-        const cleanText = text
-            .replace(/^```json?\s*/i, "")
-            .replace(/\s*```$/, "")
-            .trim();
-
-        const parsed = JSON.parse(cleanText);
-
-        // 驗證必要欄位
-        if (!parsed.time || !parsed.task) {
-            console.error("❌ LLM 回傳的 JSON 缺少必要欄位：", parsed);
+        // 檢查是否有缺少必要欄位
+        if (!parsedData.time || !parsedData.task) {
+            console.error("❌ LLM 回傳的 JSON 缺少必要欄位：", parsedData);
             return null;
         }
 
-        return parsed;
+        return parsedData;
 
     } catch (error) {
         console.error("❌ 時間解析失敗：", error.message);
