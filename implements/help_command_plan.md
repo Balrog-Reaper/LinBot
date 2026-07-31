@@ -1,93 +1,89 @@
 # 🛠️ 實作計畫：`>help` 指令與多功能查詢系統
 
 > **目標**：實作一個 `>help` 指令。
-> 1. 無參數時：開啟多分頁的「動態多頁面互動式表單」查詢可用指令。
-> 2. 原定參數子系統（例如 `>help userData`）已在後續重構中，獨立為單獨的指令 `>userInfo @某人` 以方便維護。
+> 透過動態讀取 `commandsRegistry` 中所有已註冊的指令 metadata，
+> 依據 `category` 自動分類並產生多頁面互動式幫助選單（Embed + Button）。
+
+---
+
+## ✅ 目前狀態：已完成
 
 ---
 
 ## 📅 開發步驟分解
 
-### Step 1: 匯出所有散落的 `description` (前置作業)
-為了讓 `help` 能夠一次抓到所有指令的說明，我們需要把原本宣告的常數 `export` 出來。
-- [ ] 編輯 `commands/Lin.js`，將宣告改為 `export const description_Lin = ...`
-- [ ] 編輯 `commands/restart.js`，將宣告改為 `export const description_restart = ...`
-- [ ] 編輯 `commands/gif.js`，將宣告改為 `export const description_gif = ...`
-
----
-
-### Step 2: 處理訊息分派邏輯 (`commands.js`)
-讓主程式知道有 `help` 這個新指令可以使用。
-- [ ] 引入 `help` 指令：加上 `import { help } from "./commands/help.js";`
-- [ ] 在 `switch (command)` 中加上 `case "help":` 分支（或在 `if` 判斷裡加上 `if (command === "help")`）。
-- [ ] 將 `msg` 和切割好的參數陣列 `args` 傳遞進去：`await help(msg, args);`
-
----
-
-### Step 3: 建立核心指令檔案 (`commands/help.js`)
-這個檔案負責判斷「使用者到底想查什麼」。
-- [ ] 建立 `commands/help.js` 新檔案。
-- [ ] `import` 前面步驟匯出的所有 `description_xxx` 變數。
-- [ ] 實作基本的 `args` 長度判斷：
-  - 如果 `args.length === 0`，代表使用者單純輸入 `@Lin !help`，這時要把所有的 `description_xxx` 組合起來並用 `msg.reply()` 傳送。
-  - **進階技巧**：如果想讓回覆漂亮一點，可以使用 **`EmbedBuilder`** (Discord 的漂亮排版卡片)。
-
----
-
-### Step 4: 實作子系統查詢 - `userData`
-這是 `!help` 有附帶參數 `args` 的進階功能。
-- [ ] 在 `help.js` 中判斷 `if (args[0] === "userData")`。
-- [ ] 驗證是否有 `args[1]` (被標記的人)：
-  - 可以透過 `msg.mentions.users.first()` 直接獲取被標記的使用者物件 `user`。
-  - 也可透過 `msg.guild.members.cache.get(user.id)` 獲取更能反映伺服器狀態的 `member` 物件。
-- [ ] 收集要顯示的資料：
-  - 帳號名稱：`user.username` 或 `user.tag`
-  - 伺服器暱稱：`member.nickname`
-  - 加入伺服器時間：`member.joinedAt`
-  - 帳號建立時間：`user.createdAt`
-  - 大頭貼網址：`user.displayAvatarURL()`
-- [ ] 把這些資料組合起來，回應給使用者。
-
----
-
-## 📝 輔助程式碼參考
-
-### 判斷邏輯範本 (`commands/help.js`)
+### Step 1: 標準化指令配置物件 (前置作業) ✅
+將所有指令模組從「匯出函式」改為「匯出標準配置物件」，每個指令統一遵循以下結構：
 ```javascript
-export async function help(msg, args) {
-    if (args.length === 0) {
-        // ... 處理空參數的總表查詢
-        msg.reply("這是一份指令清單..."); 
-        return;
-    }
-
-    const subCommand = args[0];
-
-    if (subCommand === "userData") {
-        // ... 處理 userData 查詢
-        const targetUser = msg.mentions.users.first();
-        if (!targetUser) {
-            msg.reply("主人，請標註想要查詢的使用者喔 🦊");
-            return;
-        }
-        // 列印出成員資訊...
-        return;
-    }
-
-    msg.reply("主人... Lin 不懂這是什麼意思呢 🦊\\n請直接輸入 \`!help\` 查看可用清單。");
-}
+export const commandName = {
+    name: "commandName",
+    description: "指令說明",
+    category: "public" | "moderator" | "owner",
+    dmAllowed: true | false,
+    ownerOnly: true | false,
+    async execute(msg, args) { /* ... */ }
+};
 ```
+- [x] 編輯 `commands/Lin.js` → 匯出標準配置物件
+- [x] 編輯 `commands/restart.js` → 匯出標準配置物件
+- [x] 編輯 `commands/gif.js` → 匯出標準配置物件
+- [x] 編輯 `commands/switchLLM.js` → 匯出標準配置物件
+- [x] 編輯 `commands/weather.js` → 匯出標準配置物件
+- [x] 編輯 `commands/userInfo.js` → 匯出標準配置物件
+- [x] 編輯 `commands/remind.js` → 匯出標準配置物件
 
-### 組合字串範本
-```javascript
-import { description_Lin } from "./Lin.js";
-import { description_restart } from "./restart.js";
-import { description_gif } from "./gif.js";
+---
 
-const allDescriptions = [
-    "主人，這是目前 Lin 能為您做的事情：",
-    description_Lin,
-    description_restart,
-    description_gif
-].join("\\n");
-```
+### Step 2: 建立中央指令註冊表 (`commandsRegistry.js`) ✅
+動態掃描 `commands/` 目錄，自動載入所有符合標準配置結構的指令模組，存入一個 `Map<name, config>` 中。
+- [x] 建立 `commands/commandsRegistry.js`
+- [x] 使用 `fs.readdirSync()` + `import()` 動態載入
+- [x] 排除非指令的輔助檔案（`commandsRouter.js`、`commandsRegistry.js`）
+- [x] 匯出 `getCommands()` 函式供其他模組取用
+
+---
+
+### Step 3: 建立中央指令路由器 (`commandsRouter.js`) ✅
+統一處理指令前綴解析、權限驗證（`ownerOnly`、`dmAllowed`），取代原本散落在各指令中的重複檢查邏輯。
+- [x] 建立 `commands/commandsRouter.js`
+- [x] 集中處理 `>` 前綴解析與指令名稱比對
+- [x] 全域 `ownerOnly` 權限攔截
+- [x] 全域 `dmAllowed` 私訊權限攔截
+- [x] 非指令訊息自動路由至 `chat.js` 進行 AI 對話
+
+---
+
+### Step 4: 建立核心指令檔案 (`commands/help.js`) ✅
+動態從 `commandsRegistry` 讀取所有已註冊指令，依據 `category` 自動分組並產生多頁面互動式 Embed 選單。
+- [x] 定義 `CATEGORY_CONFIG` 物件（每個分類的顏色、標題、按鈕樣式）
+- [x] 定義 `CATEGORY_ORDER` 陣列（控制分類的顯示順序）
+- [x] 自動分組指令至 `cmdsByCategory` 物件
+- [x] 分類驗證機制：若指令的 `category` 未定義在 `CATEGORY_ORDER` 中，會在終端機與 Discord 頻道同時輸出除錯訊息
+- [x] 建立首頁 Embed（總覽頁面）
+- [x] 依序建立各分類 Embed（公開區 / 調和區 / 主人專屬）
+- [x] 使用 `ActionRowBuilder` + `ButtonBuilder` + Spread Operator 動態產生按鈕列
+- [x] 掛載 `MessageComponentCollector`（10 分鐘過期）
+- [x] 按鈕點擊身份驗證（`ephemeral` 悄悄話攔截非授權使用者）
+- [x] 收集器過期時自動移除按鈕（含 `.catch()` 防禦訊息已刪除的情況）
+
+---
+
+### Step 5: 獨立子系統 — `>userInfo` ✅
+原本規劃在 `>help userData` 子指令中的使用者資訊查詢功能，已獨立為 `>userInfo @某人` 指令。
+- [x] 建立 `commands/userInfo.js` 為獨立指令
+- [x] 從 `help.js` 中移除子指令路由邏輯
+
+---
+
+## 🔑 關鍵設計決策
+
+### 動態 vs 靜態
+採用**動態掃描**方案：新增指令時只需在 `commands/` 目錄下建立符合標準結構的檔案，`>help` 選單會自動更新，無需手動維護指令清單。
+
+### 分類驗證
+在分組迴圈中加入防禦性檢查：若指令的 `category` 不在 `CATEGORY_ORDER` 的定義中，會同時在控制台與 Discord 頻道輸出精確的除錯訊息（指出哪個指令、使用了哪個未定義的分類），方便開發者快速定位問題。
+
+### 收集器過期處理
+- 使用 `time: 600000`（10 分鐘）作為收集器存活時間
+- 過期後自動清除按鈕元件，保留 Embed 說明卡片
+- `.catch()` 處理訊息已被手動刪除的情境（Discord Error Code `10008`）

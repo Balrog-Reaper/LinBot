@@ -88,10 +88,13 @@ services:
     build: .
     container_name: lin-bot
     restart: always
+    env_file: .env
     environment:
       - NODE_ENV=development
-      - BOTTOKEN=${BOTTOKEN}
       - MONGODB_URI=mongodb://db:27017/lin-bot
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     command: npx nodemon -L index.js
     volumes:
       - .:/usr/src/app
@@ -112,6 +115,10 @@ volumes:
   mongo_data:
 ```
 
+> ⚠️ **DNS 設定說明**：Docker Desktop for Windows (WSL2) 的容器預設使用宿主機的 DNS 設定進行域名解析。
+> 但在某些環境下，容器內部無法正確解析外部域名（如 `discord.com`），導致機器人啟動時拋出 `ENOTFOUND` 錯誤。
+> 透過在 `bot` 服務下明確設定 `dns: [8.8.8.8, 1.1.1.1]`，強制容器使用 Google 與 Cloudflare 的公共 DNS 伺服器，繞過宿主機 DNS 轉發問題。
+
 ---
 
 ## 🚀 驗證與執行步驟
@@ -122,15 +129,26 @@ docker build -t lin-bot .
 ```
 
 ### B. 本地 Compose 聯動測試
-1. 確保同目錄下有 `.env` 檔案並填入 `BOTTOKEN`：
-   ```env
-   BOTTOKEN=your_discord_bot_token_here
-   ```
+1. 確保同目錄下有 `.env` 檔案並填入所有必要的環境變數。
 2. 啟動容器群組：
    ```bash
-   docker compose up -d
+   docker compose up -d --build
    ```
 3. 檢查機器人運作日誌：
    ```bash
-   docker compose logs bot
+   docker compose logs -f bot
    ```
+
+### C. 重建映像檔（程式碼更新後）
+當修改了程式碼並需要重新部署時：
+```bash
+# 1. 停止並移除現有容器
+docker compose down
+
+# 2. 重新建置映像檔並啟動
+docker compose up -d --build
+
+# 3. 追蹤日誌確認啟動成功
+docker compose logs -f bot
+```
+

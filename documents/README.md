@@ -14,13 +14,14 @@
 - [安裝與設定](#-安裝與設定)
 - [指令一覽](#-指令一覽)
 - [AI 對話系統](#-ai-對話系統)
+- [如何新增指令](#-如何新增指令)
 - [常見問題](#-常見問題)
 
 ---
 
 ## 🌸 專案簡介
 
-**LinBot** 是為 **Barlog Family Discord 伺服器** 量身打造的專屬機器人，角色設定為來自靈界的「九尾靈狐」女僕 **Lin**。她能執行多種指令、搜尋 GIF 圖片、查詢使用者資訊，並透過本地端 AI 模型 (Ollama) 或雲端 AI 模型 (Google Gemini) 與使用者進行角色扮演對話，且可即時切換。
+**LinBot** 是為 **Barlog Family Discord 伺服器** 量身打造的專屬機器人，角色設定為來自靈界的「九尾靈狐」女僕 **Lin**。她能執行多種指令、搜尋 GIF 圖片、查詢天氣與使用者資訊，並透過本地端 AI 模型 (Ollama) 或雲端 AI 模型 (Google Gemini) 與使用者進行角色扮演對話，且可即時切換。
 
 ---
 
@@ -30,8 +31,10 @@
 |------|------|
 | 🤖 **AI 智慧對話** | 整合 Ollama 本地 LLM 及 Google Gemini 雲端 LLM，Lin 以靈狐女僕角色與主人互動對話 |
 | 🎞️ **GIF 搜尋** | 透過 Klipy API 搜尋並傳送 GIF 動圖 |
-| 📋 **互動式說明選單** | 多頁面 Embed + 按鈕切換的精美 Help 介面 |
+| 🌤️ **天氣查詢** | 透過 WeatherAPI 查詢指定國家/城市的即時天氣狀況 |
+| 📋 **互動式說明選單** | 多頁面 Embed + 按鈕切換的精美 Help 介面，動態從指令註冊表自動產生 |
 | 📌 **使用者資訊查詢** | 查看伺服器成員的詳細資訊 (暱稱、ID、加入時間等) |
+| ⏰ **排程提醒系統** | 基於 Agenda + MongoDB 的持久化排程提醒，支援口語時間解析 |
 | 🔄 **遠端重啟** | 管理員可透過指令遠端重啟機器人 |
 | 💬 **對話記憶** | AI 對話按頻道保留上下文，最多保留 10 輪 |
 | 🧠 **LLM 即時切換** | 主人可隨時在 Ollama (本地端) 與 Gemini (雲端) 之間切換 |
@@ -41,18 +44,23 @@
 ## 🏗️ 技術架構
 
 - **執行環境**：Node.js (ES Modules)
+- **容器化**：Docker + Docker Compose
 - **Discord API**：[discord.js](https://discord.js.org/) v14
 - **AI 引擎**：[Ollama](https://ollama.com/) (本地端 LLM) / [Google Gemini](https://ai.google.dev/) (雲端 LLM)
 - **GIF 來源**：[Klipy API](https://klipy.com/)
+- **天氣資料**：[WeatherAPI](https://www.weatherapi.com/)
+- **排程引擎**：[Agenda](https://github.com/agenda/agenda) + MongoDB
 - **環境變數管理**：dotenv
 
 ### 運作流程
 
 ```
-使用者在指定頻道 @Lin → index.js 監聯訊息
-    → commands.js 解析指令
-        → 以 ">" 開頭 → 比對指令名稱並執行對應模組
-        → 非指令內容 → 交給 chat.js → llmRouter.js 路由
+使用者在指定頻道 @Lin → index.js 監聽訊息
+    → commandsRouter.js（中央路由器）
+        → 以 ">" 開頭 → commandsRegistry.js 比對指令名稱
+            → 全域權限檢查（ownerOnly / dmAllowed）
+            → 執行對應指令模組的 execute()
+        → 非指令內容 → services/LLM/chat.js → llmRouter.js 路由
             → currentProvider === "ollama" → ollama.js → 本地 Ollama API
             → currentProvider === "gemini" → gemini.js → Google Gemini API
 ```
@@ -63,35 +71,40 @@
 
 ```
 LinBot/
-├── index.js              # 主程式進入點，建立 Discord Client 並監聽事件，初始化 Agenda 排程器
-├── commands.js           # 指令路由中樞，解析訊息並分派至對應指令，新增私訊 (DM) 路由
-├── commands/             # 指令模組目錄
-│   ├── Lin.js            # >Lin — 靈狐問候指令 (主人專屬)
-│   ├── gif.js            # >gif — GIF 搜尋指令
-│   ├── chat.js           # AI 對話處理 (非指令訊息，透過 LLM Router 路由)
-│   ├── help.js           # >help — 互動式多頁面說明選單
-│   ├── restart.js        # >restart — 機器人重啟指令 (主人專屬)
-│   ├── userInfo.js       # >userInfo — 使用者資訊查詢
-│   ├── switchLLM.js      # >switchLLM — 切換 LLM 提供者 (主人專屬)
-│   └── remind.js         # >remind — 排程提醒指令（含 list/cancel 子指令，主人專屬）
-├── databases/            # 資料庫層
-│   └── mongodb.js        # MongoDB 資料庫連線管理器（單例模式）
-├── services/             # 服務層
-│   ├── systemPrompt.js   # 共用系統提示詞 (Lin 的角色設定)
-│   ├── LLM/              # AI 大腦模組
-│   │   ├── gemini.js     # Gemini AI 對話服務與單次生成 API
-│   │   ├── ollama.js     # Ollama AI 對話服務與單次生成 API
-│   │   └── llmRouter.js  # LLM 路由管理器 (切換與路由對話/生成)
-│   └── scheduler/        # 排程提醒模組
+├── index.js                    # 主程式進入點，建立 Discord Client、初始化指令註冊表與排程器
+├── commands/                   # 指令模組目錄
+│   ├── commandsRouter.js       # 中央指令路由器：前綴解析、全域權限檢查、非指令訊息轉發
+│   ├── commandsRegistry.js     # 中央指令註冊表：動態掃描載入所有指令模組
+│   ├── Lin.js                  # >Lin — 靈狐問候指令 (主人專屬)
+│   ├── gif.js                  # >gif — GIF 搜尋指令
+│   ├── help.js                 # >help — 互動式多頁面說明選單（動態產生）
+│   ├── weather.js              # >weather — 天氣查詢指令
+│   ├── userInfo.js             # >userInfo — 使用者資訊查詢
+│   ├── remind.js               # >remind — 排程提醒指令 (主人專屬，含 list/cancel 子指令)
+│   ├── restart.js              # >restart — 機器人重啟指令 (主人專屬)
+│   └── switchLLM.js            # >switchLLM — 切換 LLM 提供者 (主人專屬)
+├── databases/                  # 資料庫層
+│   └── mongodb.js              # MongoDB 資料庫連線管理器（單例模式）
+├── services/                   # 服務層
+│   ├── systemPrompt.js         # 共用系統提示詞 (Lin 的角色設定)
+│   ├── LLM/                    # AI 大腦模組
+│   │   ├── chat.js             # AI 對話處理（非指令訊息，透過 LLM Router 路由）
+│   │   ├── gemini.js           # Gemini AI 對話服務與單次生成 API
+│   │   ├── ollama.js           # Ollama AI 對話服務與單次生成 API
+│   │   └── llmRouter.js        # LLM 路由管理器 (切換與路由對話/生成)
+│   └── scheduler/              # 排程提醒模組
 │       ├── schedulerManager.js # Agenda 排程引擎封裝與 API
 │       ├── timeParser.js       # NLP 口語時間解析器 (呼叫 LLM)
 │       ├── jobDefinitions.js   # Agenda 任務行為定義 (發送 DM 私訊)
 │       └── reminderTemplates.js # 女僕風格提醒訊息模板 (含時區格式化)
-├── implements/           # 功能實作規劃文件
-├── documents/            # 文件與說明書
-├── .env                  # 環境變數設定 (不納入版控)
-├── .gitignore            # Git 忽略規則
-└── package.json          # 專案依賴與設定
+├── implements/                 # 功能實作規劃文件
+├── documents/                  # 文件與說明書
+├── docker-compose.yml          # Docker Compose 設定（bot + MongoDB）
+├── Dockerfile                  # Docker 映像檔建置設定
+├── .dockerignore               # Docker 建置排除規則
+├── .env                        # 環境變數設定 (不納入版控)
+├── .gitignore                  # Git 忽略規則
+└── package.json                # 專案依賴與設定
 ```
 
 ---
@@ -99,10 +112,12 @@ LinBot/
 ## 🔧 環境需求
 
 - **Node.js** v18 以上
+- **Docker Desktop** (建議，用於容器化部署)
 - **Ollama** 本地端 AI 服務 (需預先安裝並啟動)
 - **Google Gemini API Key** (至 [Google AI Studio](https://aistudio.google.com/) 免費取得)
 - **Discord Bot Token** (需至 [Discord Developer Portal](https://discord.com/developers/applications) 建立)
 - **Klipy API Token** (用於 GIF 搜尋功能)
+- **WeatherAPI Key** (用於天氣查詢功能)
 
 ---
 
@@ -115,13 +130,7 @@ git clone <你的-repo-url>
 cd LinBot
 ```
 
-### 2. 安裝依賴套件
-
-```bash
-npm install
-```
-
-### 3. 設定環境變數
+### 2. 設定環境變數
 
 在專案根目錄建立 `.env` 檔案，填入以下內容：
 
@@ -137,6 +146,9 @@ MYUSERID=你的_User_ID
 
 # Klipy GIF API Token
 KLIPYTOKEN=你的_Klipy_API_Token
+
+# WeatherAPI Key
+WEATHERAPI_KEY=你的_WeatherAPI_Key
 
 # Ollama 設定
 OLLAMA_URL=http://127.0.0.1:11434
@@ -156,18 +168,20 @@ MONGODB_URI=mongodb://db:27017/lin-bot
 TIMEZONE=Asia/Taipei
 ```
 
-### 4. 啟動 Ollama 服務
-
-請確保 Ollama 已安裝並載入你要使用的 AI 模型：
+### 3. 使用 Docker Compose 啟動（推薦）
 
 ```bash
-ollama serve
-ollama pull <模型名稱>    # 例如: ollama pull qwen3
+# 建置映像檔並啟動容器
+docker compose up -d --build
+
+# 查看機器人運作日誌
+docker compose logs -f bot
 ```
 
-### 5. 啟動機器人
+### 4. 或使用 Node.js 直接啟動
 
 ```bash
+npm install
 node index.js
 ```
 
@@ -183,6 +197,7 @@ Beep beep
 ## 📖 指令一覽
 
 所有指令需在**指定頻道**中先 **@Lin**，再輸入指令。
+支援私訊的指令可直接在 DM 中輸入（不需標註 @Lin）。
 
 ### 🌸 公開指令 (所有成員可用)
 
@@ -190,6 +205,7 @@ Beep beep
 |------|------|------|
 | `>gif` | `@Lin >gif [關鍵字]` | 搜尋並傳送 GIF 圖片。若未提供關鍵字，預設搜尋 "Barlog" |
 | `>help` | `@Lin >help` | 開啟互動式多頁面說明選單，可透過按鈕切換分頁 |
+| `>weather` | `@Lin >weather [國家] [城市]` | 查詢天氣狀況。例如：`>weather 台灣 高雄` |
 | `>userInfo` | `@Lin >userInfo @某人` | 查詢被標註成員的伺服器資訊 |
 
 ### 🏮 主人專屬指令
@@ -197,9 +213,9 @@ Beep beep
 | 指令 | 用法 | 說明 |
 |------|------|------|
 | `>Lin` | `@Lin >Lin` | Lin 會羞澀地回應主人的招喚 |
-| `>restart` | `@Lin >restart` | 重新啟動機器人 (僅限管理員) |
+| `>restart` | `@Lin >restart` | 重新啟動機器人 |
 | `>switchLLM` | `@Lin >switchLLM [ollama/gemini]` | 切換 AI 大腦，不加參數可查看目前狀態 |
-| `>remind` | `@Lin >remind [口語時間] [事項]`<br>`@Lin >remind list`<br>`@Lin >remind cancel [編號]` | 排程提醒系統。時間到時會透過私訊 (DM) 悄悄提醒主人。支援私訊直接輸入指令（不需標註 @Lin，完全隱密，如：`>remind list`） |
+| `>remind` | `@Lin >remind [口語時間] [事項]`<br>`@Lin >remind list`<br>`@Lin >remind cancel [編號]` | 排程提醒系統。時間到時會透過私訊 (DM) 悄悄提醒主人。支援私訊直接輸入指令（完全隱密） |
 
 ### 💬 AI 自由對話
 
@@ -226,6 +242,39 @@ LinBot 的 AI 對話功能由 **Ollama** (本地端) 及 **Google Gemini** (雲�
 
 ---
 
+## 🔧 如何新增指令
+
+得益於**中央指令註冊表**的設計，新增指令只需兩步：
+
+### 1. 建立指令檔案
+
+在 `commands/` 目錄下建立新的 `.js` 檔案（例如 `play.js`），匯出一個符合標準結構的配置物件：
+
+```javascript
+export const play = {
+    name: "play",
+    description: "播放音樂。",
+    category: "public",       // 必須是 CATEGORY_ORDER 中已定義的分類
+    dmAllowed: false,
+    ownerOnly: false,
+
+    async execute(msg, args) {
+        // 你的指令邏輯...
+        await msg.reply("🎵 開始播放！");
+    }
+};
+```
+
+### 2. 完成！
+
+- 指令會在下次啟動時被 `commandsRegistry.js` **自動掃描並載入**
+- `>help` 選單會**自動顯示**新指令的名稱與說明
+- `commandsRouter.js` 會**自動處理**權限驗證（`ownerOnly`、`dmAllowed`）
+
+> ⚠️ **注意**：如果使用了新的 `category`（例如 `"music"`），需要在 `help.js` 的 `CATEGORY_CONFIG` 和 `CATEGORY_ORDER` 中新增對應的分類設定，否則 `>help` 會顯示除錯警告。
+
+---
+
 ## ❓ 常見問題
 
 ### Q: 機器人沒有回應我的訊息？
@@ -233,6 +282,14 @@ LinBot 的 AI 對話功能由 **Ollama** (本地端) 及 **Google Gemini** (雲�
 1. 確認你是在**指定頻道** (`CHANNELID`) 中發送訊息
 2. 確認訊息開頭有 **@Lin** (標註機器人)
 3. 確認指令格式正確 (指令需以 `>` 開頭)
+
+### Q: Docker 容器啟動後機器人無法連線？
+
+這是 Docker Desktop for Windows (WSL2) 的已知 DNS 問題。`docker-compose.yml` 中已配置 `dns: [8.8.8.8, 1.1.1.1]` 來解決此問題。如果問題持續，請嘗試：
+```bash
+docker compose down
+docker compose up -d --build
+```
 
 ### Q: AI 對話回應很慢？
 
@@ -243,12 +300,6 @@ Ollama 的回應速度取決於你的硬體規格與使用的模型大小。建�
 ### Q: GIF 搜尋沒有結果？
 
 確認 `.env` 中的 `KLIPYTOKEN` 設定正確，且 Klipy API 服務運作正常。
-
-### Q: 如何新增自定義指令？
-
-1. 在 `commands/` 目錄下建立新的指令模組 (例如 `myCommand.js`)
-2. 匯出一個函式，接收 `(msg, args)` 參數
-3. 在 `commands.js` 中 import 並註冊至 `commands` 物件
 
 ---
 

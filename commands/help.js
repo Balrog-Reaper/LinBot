@@ -1,169 +1,200 @@
+// ═══════════════════════════════════════════════════════════
+// help.js — 動態幫助指令
+// 自動從 commandsRegistry 讀取所有指令的 metadata，
+// 依據 category 分類並動態產生多頁面互動式幫助選單。
+// ═══════════════════════════════════════════════════════════
+
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { getCommands } from "./commandsRegistry.js";
 
 
-// 所有指令說明
-const description_Lin = `暗示指令,Lin會羞澀地答應主人的請求。`
-const description_gif = `>gif [關鍵字]搜尋並傳送 GIF 圖片。若未提供關鍵字，預設搜尋 "Barlog"。`;
-const description_restart = `重新啟動機器人（僅限管理員使用）。`;
-const description_switchLLM = `>switchLLM [ollama/gemini] 切換 AI 大腦。不加參數可查看目前狀態。`;
-const description_weather = `>weather [國家] [城市]查詢天氣狀況。例如：>weather 台灣 或 >weather 台灣 高雄。`;
-const description_remind = `>remind <時間> <事項> 設定提醒，時間到 Lin 會私訊通知。\n子指令：\`>remind list\`（查看提醒）、\`>remind cancel <編號>\`（取消提醒）\n也可以直接私訊 Lin 使用喔！🔒`;
+// ═══════════════════════════════════════════
+// 分類設定：定義每個 category 的頁面外觀
+// ═══════════════════════════════════════════
+const CATEGORY_CONFIG = {
+    public: {
+        pageTitle: "🌸 靈狐指令 - 公開區",
+        pageDescription: "這些是伺服器裡的所有人都可以找 Lin 玩的指令喔!",
+        footer: "Lin 會幫大家找到有趣的東西 🦊",
+        color: 0xFFB6C1,       // 淺粉紅色
+        buttonLabel: "公開 🌸",
+        buttonStyle: ButtonStyle.Success,
+        emoji: "✨",
+    },
+    moderator: {
+        pageTitle: "🌙 靈狐指令 - 調和區",
+        pageDescription: "具有特別權限的人才能讓 Lin 執行的秩序管理指令。",
+        footer: "Lin 會幫忙守護伺服器的和平 🦊",
+        color: 0x9B59B6,       // 紫色
+        buttonLabel: "調和 🌙",
+        buttonStyle: ButtonStyle.Secondary,
+        emoji: "🛡️",
+    },
+    owner: {
+        pageTitle: "🏮 靈狐指令 - 主人專屬",
+        pageDescription: "噓... 這是只有主人您可以對 Lin 下達的秘密指令喔 (///▽///)",
+        footer: "Lin 永遠是主人的專屬狐狸 🦊💕",
+        color: 0xE74C3C,       // 紅色
+        buttonLabel: "主人 🏮",
+        buttonStyle: ButtonStyle.Danger,
+        emoji: "💖",
+    },
+};
+
+// 分類的顯示順序
+const CATEGORY_ORDER = ["public", "moderator", "owner"];
 
 
+export const help = {
+    name: "help",
+    description: "顯示 Lin 的指令清單與使用說明。",
+    category: "public",
+    dmAllowed: true,
+    ownerOnly: false,
 
-export async function help(msg, args) {
+    async execute(msg, args) {
 
-    // separatorLine 用於在嵌入訊息 (Embed) 中繪製分隔線，增加視覺美觀
-    const separatorLine = "--------------------------------------"
+        const separatorLine = "--------------------------------------";
+        const commands = getCommands();
 
-    // 判斷 args 長度，若長度為 0 代表使用者只輸入了 `>help`，沒有附帶其他參數
-    // 此時將觸發完整的「動態多頁面互動式表單」
-    if (args.length === 0) {
+        // ════════════════════════════════════════
+        // 1. 依據 category 自動分組指令
+        // ════════════════════════════════════════
 
-        // ==========================================
-        // 1. 建立各頁面的 Embed (嵌入訊息卡片) 內容
-        // ==========================================
+        // 建立一個物件，用來存放不同分類的指令
+        const cmdsByCategory = {};
 
-        // 【首頁 (Page 1)】：顯示選單總覽與導覽列
-        const embed_page1 = new EmbedBuilder()
+        // 設定所有分類的初始值
+        for (const category of CATEGORY_ORDER) {
+            cmdsByCategory[category] = [];
+        }
+
+        // 將指令依據 category 分類
+        for (const [name, cmd] of commands) {
+            const cmdCategory = cmd.category;
+            if (!cmdsByCategory[cmdCategory]) {
+
+                // 1. 在 Docker / 終端機控制台印出超詳細的紅色警告，方便查閱日誌
+                console.error(`\n❌ [DEBUG 錯誤] 指令 ">${name}" 的分類 "${cmd.category}" 未定義在 CATEGORY_ORDER 中！\n`)
+
+                // 2. 在 Discord 頻道直接印出具體的錯誤資訊，讓您在玩機器人時能一目了然
+                await msg.reply(`⚠️ **開發者除錯提示**：指令 \`>${name}\` 使用了未定義的分類 \`${cmd.category}\`，請至 CATEGORY_ORDER 中新增或修正！`);
+                return;
+            }
+            cmdsByCategory[cmdCategory].push(cmd);
+        }
+
+        // ════════════════════════════════════════
+        // 2. 建立首頁 Embed
+        // ════════════════════════════════════════
+        const pageEmbeds = [];
+        const pageKeys = ["home"]; // 對應按鈕 customId 的鍵值
+
+        const embed_home = new EmbedBuilder()
             .setTitle("🦊 LinBot 靈狐指南 (首頁)")
             .setDescription(`主人，這是 Lin 目前能為您服務的項目總覽喔～搖搖尾巴。✨\n${separatorLine}`)
             .addFields(
-                { name: "🌸 Page 1", value: "目前的總覽介紹" },
-                { name: "🍃 Page 2", value: "大家都能用的公開指令" },
-                { name: "🌙 Page 3", value: "維持秩序的進階調和指令" },
-                { name: "🏮 Page 4", value: "只有主人能用的秘密指令" },
-            )
-            .addFields({ name: "\u200B", value: `${separatorLine}` }) // 使用零寬度字元作為空行，下方塞入分隔線
-            .setFooter({ text: 'Lin 隨時乖乖聽主人的話 🦊' })
-            .setColor(0xFFB6C1) // 淺粉紅色
-            .setTimestamp();
-
-
-        // 【公開指令區 (Page 2)】：所有成員皆可使用的指令
-        const embed_page2 = new EmbedBuilder()
-            .setTitle("🌸 靈狐指令 - 公開區")
-            .setDescription(`這些是伺服器裡的所有人都可以找 Lin 玩的指令喔!\n${separatorLine}`)
-            .addFields(
-                { name: "✨ >gif", value: description_gif },
-                { name: "🌤️ >weather", value: description_weather },
+                { name: "🌸 公開區", value: "大家都能用的公開指令" },
+                { name: "🌙 調和區", value: "維持秩序的進階調和指令" },
+                { name: "🏮 主人專屬", value: "只有主人能用的秘密指令" },
             )
             .addFields({ name: "\u200B", value: `${separatorLine}` })
-            .setFooter({ text: 'Lin 會幫大家找到有趣的圖片 🦊' })
+            .setFooter({ text: "Lin 隨時乖乖聽主人的話 🦊" })
             .setColor(0xFFB6C1)
             .setTimestamp();
 
-        // 【調和指令區 (Page 3)】：預留給管理員/版主維持秩序的指令 (如踢人、禁言)
-        const embed_page3 = new EmbedBuilder()
-            .setTitle("🌙 靈狐指令 - 調和區")
-            .setDescription(`具有特別權限的人才能讓 Lin 執行的秩序管理指令。\n${separatorLine}`)
-            .addFields(
-                { name: "🈳 虛位以待", value: "目前這裡還沒有指令呢，等待主人教 Lin～" }
-            )
-            .addFields({ name: "\u200B", value: `${separatorLine}` })
-            .setFooter({ text: 'Lin 會幫忙守護伺服器的和平 🦊' })
-            .setColor(0x9B59B6) // 紫色
-            .setTimestamp();
+        pageEmbeds.push(embed_home);
 
+        // ════════════════════════════════════════
+        // 3. 依序建立各分類的 Embed
+        // ════════════════════════════════════════
+        for (const category of CATEGORY_ORDER) {
+            const config = CATEGORY_CONFIG[category];
+            const cmds = cmdsByCategory[category];
 
+            const embed = new EmbedBuilder()
+                .setTitle(config.pageTitle)
+                .setDescription(`${config.pageDescription}\n${separatorLine}`)
+                .setFooter({ text: config.footer })
+                .setColor(config.color)
+                .setTimestamp();
 
-        // 【主人專屬區 (Page 4)】：只有開發者/擁有者才能執行的指令
-        const embed_page4 = new EmbedBuilder()
-            .setTitle("🏮 靈狐指令 - 主人專屬")
-            .setDescription(`噓... 這是只有主人您可以對 Lin 下達的秘密指令喔 (///▽///)\n${separatorLine}`)
-            .addFields(
-                { name: "💖 >Lin", value: description_Lin },
-                { name: "⚠️ >restart", value: description_restart },
-                { name: "🧠 >switchLLM", value: description_switchLLM },
-                { name: "⏰ >remind", value: description_remind },
-            )
-            .addFields({ name: "\u200B", value: `${separatorLine}` })
-            .setFooter({ text: 'Lin 永遠是主人的專屬狐狸 🦊💕' })
-            .setColor(0xE74C3C) // 紅色
-            .setTimestamp();
+            if (cmds.length === 0) {
+                embed.addFields({ name: "🈳 虛位以待", value: "目前這裡還沒有指令呢，等待主人教 Lin～" });
+            } else {
+                for (const cmd of cmds) {
+                    embed.addFields({
+                        name: `${config.emoji} >${cmd.name}`,
+                        value: cmd.description || "（尚無說明）",
+                    });
+                }
+            }
 
-        // 建立按鈕
-        // ==========================================
-        // 2. 建立按鈕控制列 (ActionRow)
-        // ==========================================
-        // ActionRowBuilder 是一個容器，用來裝載這些按鈕組件
-        // customId 就像是按鈕的身分證，按下去的時候我們才知道是哪顆被按了
+            embed.addFields({ name: "\u200B", value: `${separatorLine}` });
+
+            pageEmbeds.push(embed);
+            pageKeys.push(category);
+        }
+
+        // ════════════════════════════════════════
+        // 4. 建立按鈕控制列
+        // ════════════════════════════════════════
         const button_bar = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
-                    .setCustomId("help_Page1") // 身分證：首頁
+                    .setCustomId("help_home")
                     .setLabel("首頁 🦊")
-                    .setStyle(ButtonStyle.Primary), // Primary 通常是藍色
-                new ButtonBuilder()
-                    .setCustomId("help_Page2")
-                    .setLabel("公開 🌸")
-                    .setStyle(ButtonStyle.Success), // Success 通常是綠色
-                new ButtonBuilder()
-                    .setCustomId("help_Page3")
-                    .setLabel("調和 🌙")
-                    .setStyle(ButtonStyle.Secondary), // Secondary 通常是灰色
-                new ButtonBuilder()
-                    .setCustomId("help_Page4")
-                    .setLabel("主人 🏮")
-                    .setStyle(ButtonStyle.Danger) // Danger 通常是紅色
-            )
+                    .setStyle(ButtonStyle.Primary),
+                ...CATEGORY_ORDER.map(category => {
+                    const config = CATEGORY_CONFIG[category];
+                    return new ButtonBuilder()
+                        .setCustomId(`help_${category}`)
+                        .setLabel(config.buttonLabel)
+                        .setStyle(config.buttonStyle);
+                })
+            );
 
-        // ==========================================
-        // 3. 發送初始訊息並掛載監聽器
-        // ==========================================
-        // 將「首頁內容」與「按鈕列」一併回覆到頻道上
+        // ════════════════════════════════════════
+        // 5. 發送初始訊息並掛載監聽器
+        // ════════════════════════════════════════
         const replyMsg = await msg.reply({
-            embeds: [embed_page1],
+            embeds: [embed_home],
             components: [button_bar],
-        })
+        });
 
-        // 在剛剛發出去的這則訊息 (replyMsg) 上，建立一個「按鈕點擊收集器」，存活時間 10 分鐘 (600,000 毫秒)
-        const collector = replyMsg.createMessageComponentCollector({ time: 600000 })
+        const collector = replyMsg.createMessageComponentCollector({ time: 600000 });
 
-        // 啟動監聽，當有人點擊這則訊息上的任何按鈕時觸發
         collector.on("collect", async (interaction) => {
-            // 安全防護：如果點擊按鈕的人，不是當初下達 `>help` 指令的人，就阻擋他
+            // 安全防護：如果點擊按鈕的人，不是當初下達 >help 指令的人，就阻擋他
             if (interaction.user.id !== msg.author.id) {
-                return await interaction.reply({ content: `主人交代過，只有 ${msg.author.tag} 才能翻閱這本手冊喔！🦊`, ephemeral: true })
-            } else {
-                // 根據按下的按鈕，抽換成對應頁面的 embed，並保留原本的 button_bar
-                if (interaction.customId === "help_Page1") {
-                    await interaction.update({      // 收到按鈕的互動後更新訊息頁面
-                        embeds: [embed_page1],
-                        components: [button_bar]
-                    })
-                }
-
-                if (interaction.customId === "help_Page2") {
-                    await interaction.update({
-                        embeds: [embed_page2],
-                        components: [button_bar]
-                    })
-                }
-
-                if (interaction.customId === "help_Page3") {
-                    await interaction.update({
-                        embeds: [embed_page3],
-                        components: [button_bar]
-                    })
-                }
-
-                if (interaction.customId === "help_Page4") {
-                    await interaction.update({
-                        embeds: [embed_page4],
-                        components: [button_bar]
-                    })
-                }
+                return await interaction.reply({
+                    content: `主人交代過，只有 ${msg.author.tag} 才能翻閱這本手冊喔！🦊`,
+                    ephemeral: true,    // 只有點擊按鈕的人才看得到
+                });
             }
-        })
 
-        // 當收集器過期結束時，可以寫一段邏輯把按鈕清空，避免死按鈕留在畫面上
+            // 從 customId 中解析出對應的頁面 key（help_home → home, help_public → public）
+            const pageKey = interaction.customId.replace("help_", "");
+            const pageIndex = pageKeys.indexOf(pageKey);
+
+            if (pageIndex !== -1) {
+                await interaction.update({
+                    embeds: [pageEmbeds[pageIndex]],
+                    components: [button_bar],
+                });
+            }
+        });
+
+        // 當收集器過期結束時，移除按鈕避免死按鈕留在畫面上
         collector.on("end", async () => {
-            // 移除所有按鈕組件，只留下卡片
-            await replyMsg.edit({ embeds: [], components: [] })
-                .catch((error) => { console.error("發生錯誤：", error.message) });
+            await replyMsg.edit({ components: [] })
+                .catch((error) => {
+
+                    // 如果錯誤代碼是 10008 代表訊息已被刪除，這種情況直接忽略；其他錯誤才記錄
+                    if (error.code !== 10008) {
+                        console.error("移除幫助選單按鈕失敗：", error.message);
+                    }
+                });
         });
     }
-
-
-}
+};

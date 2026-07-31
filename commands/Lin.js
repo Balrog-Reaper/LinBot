@@ -7,10 +7,16 @@ const replies = [
     "請吩咐，主人!"
 ]
 
-export function Lin(msg){
-    msg.reply("您好! 主人");
-    const index = Math.floor(Math.random() * replies.length);
-    msg.channel.send(replies[index]);
-}
+export const Lin = {
+    name: "Lin",
+    description: "暗示指令，Lin 會羞澀地答應主人的請求。",
+    category: "owner",
+    dmAllowed: false,
+    ownerOnly: true,
 
-
+    async execute(msg) {
+        msg.reply("您好! 主人");
+        const index = Math.floor(Math.random() * replies.length);
+        msg.channel.send(replies[index]);
+    }
+};

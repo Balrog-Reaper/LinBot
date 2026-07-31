@@ -28,14 +28,7 @@ export function defineAllJobs(agenda, client) {
     // ═══════════════════════════════════════════
     // 任務：send_reminder（一次性私訊提醒）
     // ═══════════════════════════════════════════
-    agenda.define("send_reminder", {
-        backoff: backoffStrategies.exponential({
-            delay: 1000,                // 初始延遲時間
-            factor: 2,                  // 乘數 / 倍率
-            maxRetries: 5,              // 最大重試次數
-            jitter: 0.1                 // 隨機抖動 / 波動範圍值
-        })
-    }, async (job) => {
+    agenda.define("send_reminder", async (job) => {
         const { userId, channelId, content } = job.attrs.data;
         const dmRetryCount = job.attrs.data.dmRetryCount || 0;
 
@@ -104,5 +97,12 @@ export function defineAllJobs(agenda, client) {
             // ═══════════════════════════════════════════
             throw error;
         }
+    }, {
+        backoff: backoffStrategies.exponential({
+            delay: 1000,                // 初始延遲時間
+            factor: 2,                  // 乘數 / 倍率
+            maxRetries: 5,              // 最大重試次數
+            jitter: 0.1                 // 隨機抖動 / 波動範圍值
+        })
     });
 }

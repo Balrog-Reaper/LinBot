@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { gotMessage } from "./commands.js";
+import { handleMessage, initRouter } from "./commands/commandsRouter.js";
 import { initScheduler } from "./services/scheduler/schedulerManager.js";
 
 
@@ -28,6 +28,13 @@ client.once('ready', async () => {
     console.log("Beep beep");
     console.log(`✅ 機器人 ${client.user.username} 已上線！`);
 
+    // 初始化指令路由器（動態載入所有指令）
+    try {
+        await initRouter();
+    } catch (error) {
+        console.error("❌ 指令路由器初始化失敗：", error.message);
+    }
+
     // 初始化排程系統（Agenda + MongoDB）
     try {
         await initScheduler(client);
@@ -39,7 +46,7 @@ client.once('ready', async () => {
 
 
 // 觸發訊息事件
-client.on("messageCreate", gotMessage);
+client.on("messageCreate", handleMessage);
 
 
 // 機器人正式連接discord伺服器
