@@ -92,18 +92,15 @@ services:
     environment:
       - NODE_ENV=development
       - MONGODB_URI=mongodb://db:27017/lin-bot
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
     command: npx nodemon -L index.js
     volumes:
       - .:/usr/src/app
-      - /usr/src/app/node_modules
+      - lin_bot_node_modules:/usr/src/app/node_modules
     depends_on:
       - db
 
   db:
-    image: mongo:6-jammy
+    image: mongo:8.0
     container_name: lin-bot-db
     restart: always
     volumes:
@@ -113,11 +110,8 @@ services:
 
 volumes:
   mongo_data:
+  lin_bot_node_modules:
 ```
-
-> ⚠️ **DNS 設定說明**：Docker Desktop for Windows (WSL2) 的容器預設使用宿主機的 DNS 設定進行域名解析。
-> 但在某些環境下，容器內部無法正確解析外部域名（如 `discord.com`），導致機器人啟動時拋出 `ENOTFOUND` 錯誤。
-> 透過在 `bot` 服務下明確設定 `dns: [8.8.8.8, 1.1.1.1]`，強制容器使用 Google 與 Cloudflare 的公共 DNS 伺服器，繞過宿主機 DNS 轉發問題。
 
 ---
 

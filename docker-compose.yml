@@ -3,12 +3,9 @@ services:
     build: .
     container_name: lin-bot
     restart: always
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
+    env_file: .env
     environment:
       - NODE_ENV=development
-      - BOTTOKEN=${BOTTOKEN}
       - MONGODB_URI=mongodb://db:27017/lin-bot
     command: npx nodemon -L index.js
     volumes:
