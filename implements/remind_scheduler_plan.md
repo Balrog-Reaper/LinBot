@@ -601,18 +601,23 @@ export async function scheduleReminder(scheduledDate, data) {
 export async function getUserReminders(userId) {
     if (!agenda) throw new Error("排程器尚未初始化");
 
-    const jobs = await agenda.jobs({
+    // 1. 查詢指定使用者的所有提醒任務
+    const result = await agenda.queryJobs({
         name: "send_reminder",
-        "data.userId": userId,
-        nextRunAt: { $ne: null },    // 尚未執行的任務
+        data: { userId: userId },
     });
 
-    return jobs.map((job, index) => ({
+    // 2. 過濾出尚未執行的任務，並依照預計執行時間由小到大排序
+    const pendingJobs = result.jobs
+        .filter(job => job.nextRunAt != null)
+        .sort((a, b) => new Date(a.nextRunAt) - new Date(b.nextRunAt));
+
+    return pendingJobs.map((job, index) => ({
         index: index + 1,
-        content:     job.attrs.data.content,
-        scheduledAt: job.attrs.nextRunAt,
-        createdAt:   job.attrs.data.createdAt,
-        jobId:       job.attrs._id,
+        content:     job.data.content,
+        scheduledAt: job.nextRunAt,
+        createdAt:   job.data.createdAt,
+        jobId:       job._id,
     }));
 }
 
@@ -637,7 +642,7 @@ export async function cancelReminder(userId, index) {
     }
 
     const target = reminders[index - 1];
-    await agenda.cancel({ _id: target.jobId });
+    await agenda.cancel({ id: target.jobId.toString() });
 
     return {
         success: true,

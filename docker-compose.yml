@@ -1,8 +1,12 @@
 services:
+  # ─────────────────────────────────
+  # 開發環境容器
+  # ─────────────────────────────────
   bot:
-    build: .
+    build:
+      context: .
+      target: development
     container_name: lin-bot
-    restart: always
     env_file: .env
     environment:
       - NODE_ENV=development
