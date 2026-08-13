@@ -1,0 +1,133 @@
+import type { Message } from "discord.js";
+import type { BotCommand } from "./commandTypes.js";
+
+// 引入時間解析模組
+import { parseTimeWithLLM } from "../services/scheduler/timeParser.js";
+
+// 引入排程管理模組
+import {
+    scheduleReminder,
+    getUserReminders,
+    cancelReminder
+} from "../services/scheduler/schedulerManager.js";
+
+// 引入提醒訊息範本模組
+import {
+    formatConfirmMessage,
+    formatReminderListEmbed,
+    formatCancelMessage,
+    formatErrorMessage
+} from "../services/scheduler/reminderTemplates.js";
+
+
+/**
+ * >remind 指令主體
+ */
+export const remind: BotCommand = {
+    name: "remind",
+    description: "`>remind <時間> <事項>` 設定提醒，時間到 Lin 會私訊通知。\n子指令：`>remind list`（查看提醒）、`>remind cancel <編號>`（取消提醒）\n也可以直接私訊 Lin 使用喔！🔒",
+    category: "owner",
+    dmAllowed: true,
+    ownerOnly: true,
+
+    async execute(msg: Message, args: string[]): Promise<void> {
+        if ("sendTyping" in msg.channel) {
+            await msg.channel.sendTyping();
+        }
+
+        // ═══════════════════════════════════════════
+        // 無參數 → 提示用法
+        // ═══════════════════════════════════════════
+        if (args.length === 0) {
+            await msg.reply(
+                "請告訴 Lin 要提醒什麼喔！🦊\n" +
+                "用法：`>remind <時間> <事項>`\n" +
+                "範例：`>remind 明天早上八點 記得繳報告`\n" +
+                "其他：`>remind list`（查看提醒）、`>remind cancel <編號>`（取消提醒）"
+            );
+            return;
+        }
+
+        // ═══════════════════════════════════════════
+        // 子指令：list（查看待執行提醒）
+        // ═══════════════════════════════════════════
+        if (args[0] === "list") {
+            try {
+                const reminders = await getUserReminders(msg.author.id);
+                const embed = formatReminderListEmbed(reminders, msg.author.username);
+                await msg.reply({ embeds: [embed] });
+            } catch (error: unknown) {
+                const errMsg = error instanceof Error ? error.message : String(error);
+                console.error("❌ 查詢提醒錯誤：", errMsg);
+                await msg.reply(formatErrorMessage("查詢提醒時發生錯誤"));
+            }
+            return;
+        }
+
+        // ═══════════════════════════════════════════
+        // 子指令：cancel <編號>（取消指定提醒）
+        // ═══════════════════════════════════════════
+        if (args[0] === "cancel") {
+            const index = parseInt(args[1]!);
+            if (isNaN(index) || index < 1) {
+                await msg.reply("請輸入正確的提醒編號喔！用法：`>remind cancel 1`");
+                return;
+            }
+
+            try {
+                const result = await cancelReminder(msg.author.id, index);
+                await msg.reply(formatCancelMessage(result));
+            } catch (error: unknown) {
+                const errMsg = error instanceof Error ? error.message : String(error);
+                console.error("❌ 取消提醒錯誤：", errMsg);
+                await msg.reply(formatErrorMessage("取消提醒時發生錯誤"));
+            }
+            return;
+        }
+
+        // ═══════════════════════════════════════════
+        // 主要功能：解析時間 → 排程提醒
+        // ═══════════════════════════════════════════
+        const rawInput = args.join(" "); // 將所有參數合併為原始字串
+
+        try {
+
+            // Step 1：呼叫 LLM 解析時間
+            const parsedData = await parseTimeWithLLM(rawInput);
+
+            if (!parsedData || !parsedData.time || !parsedData.task) {
+                await msg.reply(formatErrorMessage("Lin 無法理解這個時間描述，請換個方式說說看？"));
+                return;
+            }
+
+            // Step 2：驗證解析出的時間是否為未來時間
+            const scheduledDate = new Date(parsedData.time);
+            if (isNaN(scheduledDate.getTime())) {
+                await msg.reply(formatErrorMessage("LLM 回傳了無效的時間格式，請重試一次"));
+                return;
+            }
+            if (scheduledDate <= new Date()) {
+                await msg.reply(formatErrorMessage("這個時間已經過去了呢～請設定一個未來的時間吧！"));
+                return;
+            }
+
+            // Step 3：將任務送入 Agenda 排程
+            const jobData = {
+                userId: msg.author.id,
+                channelId: msg.channel.id,
+                content: parsedData.task,
+                createdAt: new Date().toISOString(),
+            };
+
+            await scheduleReminder(scheduledDate, jobData);
+
+            // Step 4：回覆確認訊息
+            await msg.reply(formatConfirmMessage(parsedData.task, scheduledDate));
+
+        } catch (error: unknown) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            console.error("❌ 排程提醒錯誤：", errMsg);
+            await msg.reply(formatErrorMessage("設定提醒時發生了一點問題，請稍後再試"));
+        }
+    }
+};

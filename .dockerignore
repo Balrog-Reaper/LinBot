@@ -2,6 +2,10 @@
 node_modules/
 npm-debug.log
 
+# 排除 TypeScript 編譯產出
+dist/
+*.tsbuildinfo
+
 # 排除環境變數與機密資訊
 .env
 .env.*

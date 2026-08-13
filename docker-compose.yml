@@ -11,7 +11,7 @@ services:
     environment:
       - NODE_ENV=development
       - MONGODB_URI=mongodb://db:27017/lin-bot
-    command: npx nodemon -L index.js
+    command: npx tsx watch src/index.ts
     volumes:
       - .:/usr/src/app
       - lin_bot_node_modules:/usr/src/app/node_modules

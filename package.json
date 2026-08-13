@@ -2,14 +2,16 @@
   "name": "discordbot",
   "version": "1.0.0",
   "description": "LinBot — Barlog Family Discord 伺服器的九尾靈狐機器人",
-  "main": "index.js",
+  "main": "dist/index.js",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "npx nodemon -L index.js",
-    "start": "node index.js",
+    "dev": "npx tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -27,8 +29,11 @@
     "ollama": "^0.6.3"
   },
   "devDependencies": {
+    "@types/node": "22.10.10",
+    "mongodb-memory-server": "^10.0.0",
     "nodemon": "^3.1.0",
-    "vitest": "^3.2.0",
-    "mongodb-memory-server": "^10.0.0"
+    "tsx": "4.19.2",
+    "typescript": "5.7.3",
+    "vitest": "^3.2.0"
   }
 }

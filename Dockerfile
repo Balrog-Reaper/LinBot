@@ -1,48 +1,41 @@
 # ════════════════════════════════════════════
-# 階段 1：共用基礎層
+# 階段 1：共用基礎層 (Node.js 22)
 # ════════════════════════════════════════════
 FROM node:22-alpine AS base
-
 WORKDIR /usr/src/app
-
-# 複製 package*.json 用於快取依賴安裝
-COPY package*.json ./
+COPY package*.json tsconfig.json ./
 
 
 # ════════════════════════════════════════════
-# 階段 2：開發環境（含 devDependencies）
+# 階段 2：開發環境 (使用 tsx watch + devDependencies)
 # ════════════════════════════════════════════
 FROM base AS development
-
 ENV NODE_ENV=development
-
-# 安裝所有依賴（含 devDependencies：Vitest、nodemon 等）
 RUN npm install
-
 COPY . .
-
 RUN chown -R node:node /usr/src/app
 USER node
-
-# 開發模式：使用 nodemon 自動重啟
-CMD ["npx", "nodemon", "-L", "index.js"]
+CMD ["npx", "tsx", "watch", "src/index.ts"]
 
 
 # ════════════════════════════════════════════
-# 階段 3：生產環境（僅 dependencies）
+# 階段 3：編譯層 (tsc 編譯 TypeScript → JavaScript)
 # ════════════════════════════════════════════
-FROM base AS production
+FROM base AS builder
+RUN npm install
+COPY src/ ./src/
+RUN npx tsc
 
+
+# ════════════════════════════════════════════
+# 階段 4：生產環境 (僅 dependencies + 編譯產物)
+# ════════════════════════════════════════════
+FROM node:22-alpine AS production
 ENV NODE_ENV=production
-
-# 僅安裝生產依賴（跳過 Vitest、nodemon 等）
+WORKDIR /usr/src/app
+COPY package*.json ./
 RUN npm install --omit=dev
-
-COPY . .
-
+COPY --from=builder /usr/src/app/dist ./dist
 RUN chown -R node:node /usr/src/app
 USER node
-
-# 生產模式：直接用 node 啟動
-CMD ["node", "index.js"]
-
+CMD ["node", "dist/index.js"]

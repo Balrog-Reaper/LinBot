@@ -5,5 +5,8 @@
 # 忽略所有 node_modules 資料夾
 node_modules/
 
+# TypeScript 編譯輸出（tsc 自動產生）
+dist/
+
 # 測試覆蓋率報告（Vitest）
 coverage/
