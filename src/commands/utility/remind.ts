@@ -1,15 +1,15 @@
 import type { Message } from "discord.js";
-import type { BotCommand } from "./commandTypes.js";
+import type { BotCommand } from "../commandTypes.js";
 
 // 引入時間解析模組
-import { parseTimeWithLLM } from "../services/scheduler/timeParser.js";
+import { parseTimeWithLLM } from "../../services/scheduler/timeParser.js";
 
 // 引入排程管理模組
 import {
     scheduleReminder,
     getUserReminders,
     cancelReminder
-} from "../services/scheduler/schedulerManager.js";
+} from "../../services/scheduler/schedulerManager.js";
 
 // 引入提醒訊息範本模組
 import {
@@ -17,7 +17,7 @@ import {
     formatReminderListEmbed,
     formatCancelMessage,
     formatErrorMessage
-} from "../services/scheduler/reminderTemplates.js";
+} from "../../services/scheduler/reminderTemplates.js";
 
 
 /**

@@ -10,44 +10,60 @@
    - 透過 `.dockerignore` 排除 `.env` 等敏感檔案，防止開發環境的私鑰或 Token 被打包到 Image 中。
    - 所有機密資訊（例如 `BOTTOKEN`、`MONGODB_URI`、AI API Key 等）將改由容器啟動時的環境變數傳入。
 3. **安全基礎映像檔與版本鎖定**：
-   - 使用官方的 `node:20-alpine`，Alpine 版本體積小、漏洞少，且有固定的主版本號，能避免因映像檔自動升級而導致專案異常。
-4. **安裝階段優化**：
-   - 使用 `npm ci --only=production` 只安裝生產環境依賴，避免引入開發工具 (devDependencies)，從而減少攻擊面。
+   - 使用官方的 `node:22-alpine`，Alpine 版本體積小、漏洞少，且有固定的主版本號，能避免因映像檔自動升級而導致專案異常。
+4. **多階段建置 (Multi-stage Build) 與安裝優化**：
+   - 第一階段安裝所有依賴並使用 `tsc` 編譯 TypeScript 原始碼。
+   - 最終階段使用 `npm install --omit=dev` 只安裝生產環境依賴，避免引入開發工具，並將編譯好的 JS 產物複製過來，從而大幅減少攻擊面與映像檔體積。
 
 ---
 
 ## 📂 檔案配置設計
 
 ### 1. Dockerfile
-建立本地開發與生產環境的 Docker 映像檔定義檔。
+建立本地開發與生產環境的 Docker 映像檔定義檔。支援多階段建置 (Multi-stage Build)。
 
 ```dockerfile
-# 使用官方 Node.js 20 輕量 Alpine 映像檔
-FROM node:20-alpine AS base
-
-# 設定環境變數為開發模式
-ENV NODE_ENV=development
-
-# 建立工作目錄
+# ════════════════════════════════════════════
+# 階段 1：共用基礎層 (Node.js 22)
+# ════════════════════════════════════════════
+FROM node:22-alpine AS base
 WORKDIR /usr/src/app
+COPY package*.json tsconfig.json ./
 
-# 先複製 package*.json 用於快取依賴安裝
-COPY package*.json ./
 
-# 安裝所有依賴套件（包含開發用的套件）
+# ════════════════════════════════════════════
+# 階段 2：開發環境 (使用 tsx watch + devDependencies)
+# ════════════════════════════════════════════
+FROM base AS development
+ENV NODE_ENV=development
 RUN npm install
-
-# 複製其餘的專案檔案
 COPY . .
-
-# 將工作目錄的所有權賦予非 Root 使用者 "node"
 RUN chown -R node:node /usr/src/app
-
-# 切換為安全非 Root 使用者
 USER node
+CMD ["npx", "tsx", "watch", "src/index.ts"]
 
-# 啟動應用程式
-CMD ["node", "index.js"]
+
+# ════════════════════════════════════════════
+# 階段 3：編譯層 (tsc 編譯 TypeScript → JavaScript)
+# ════════════════════════════════════════════
+FROM base AS builder
+RUN npm install
+COPY src/ ./src/
+RUN npx tsc
+
+
+# ════════════════════════════════════════════
+# 階段 4：生產環境 (僅 dependencies + 編譯產物)
+# ════════════════════════════════════════════
+FROM node:22-alpine AS production
+ENV NODE_ENV=production
+WORKDIR /usr/src/app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY --from=builder /usr/src/app/dist ./dist
+RUN chown -R node:node /usr/src/app
+USER node
+CMD ["node", "dist/index.js"]
 ```
 
 ### 2. .dockerignore
@@ -80,19 +96,20 @@ README.md
 ```
 
 ### 3. docker-compose.yml (選用本地測試用)
-為了讓本地測試更方便，可建立 `docker-compose.yml`，同時配置機器人與 MongoDB 的安全網路連線。並且透過掛載本地目錄及使用 `nodemon -L` 實作熱重載開發。
+為了讓本地測試更方便，可建立 `docker-compose.yml`，配置機器人與 MongoDB 的連線。透過指定 `target: development` 與 `tsx watch` 實作熱重載開發。
 
 ```yaml
 services:
   bot:
-    build: .
+    build:
+      context: .
+      target: development
     container_name: lin-bot
-    restart: always
     env_file: .env
     environment:
       - NODE_ENV=development
       - MONGODB_URI=mongodb://db:27017/lin-bot
-    command: npx nodemon -L index.js
+    command: npx tsx watch src/index.ts
     volumes:
       - .:/usr/src/app
       - lin_bot_node_modules:/usr/src/app/node_modules

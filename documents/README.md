@@ -44,7 +44,9 @@
 ## 🏗️ 技術架構
 
 - **執行環境**：Node.js (ES Modules)
-- **容器化**：Docker + Docker Compose
+- **開發語言**：TypeScript (強型別支援)
+- **測試框架**：Vitest (TDD 測試策略)
+- **容器化**：Docker + Docker Compose (多階段建置 Multi-stage)
 - **Discord API**：[discord.js](https://discord.js.org/) v14
 - **AI 引擎**：[Ollama](https://ollama.com/) (本地端 LLM) / [Google Gemini](https://ai.google.dev/) (雲端 LLM)
 - **GIF 來源**：[Klipy API](https://klipy.com/)
@@ -71,41 +73,39 @@
 
 ```
 LinBot/
-├── index.js                    # 主程式進入點，建立 Discord Client、初始化指令註冊表與排程器
-├── commands/                   # 指令模組目錄
-│   ├── commandsRouter.js       # 中央指令路由器：前綴解析、全域權限檢查、非指令訊息轉發
-│   ├── commandsRegistry.js     # 中央指令註冊表：動態掃描載入所有指令模組
-│   ├── Lin.js                  # >Lin — 靈狐問候指令 (主人專屬)
-│   ├── gif.js                  # >gif — GIF 搜尋指令
-│   ├── help.js                 # >help — 互動式多頁面說明選單（動態產生）
-│   ├── weather.js              # >weather — 天氣查詢指令
-│   ├── userInfo.js             # >userInfo — 使用者資訊查詢
-│   ├── remind.js               # >remind — 排程提醒指令 (主人專屬，含 list/cancel 子指令)
-│   ├── restart.js              # >restart — 機器人重啟指令 (主人專屬)
-│   └── switchLLM.js            # >switchLLM — 切換 LLM 提供者 (主人專屬)
-├── databases/                  # 資料庫層
-│   └── mongodb.js              # MongoDB 資料庫連線管理器（單例模式）
-├── services/                   # 服務層
-│   ├── systemPrompt.js         # 共用系統提示詞 (Lin 的角色設定)
-│   ├── LLM/                    # AI 大腦模組
-│   │   ├── chat.js             # AI 對話處理（非指令訊息，透過 LLM Router 路由）
-│   │   ├── gemini.js           # Gemini AI 對話服務與單次生成 API
-│   │   ├── ollama.js           # Ollama AI 對話服務與單次生成 API
-│   │   └── llmRouter.js        # LLM 路由管理器 (切換與路由對話/生成)
-│   └── scheduler/              # 排程提醒模組
-│       ├── schedulerManager.js # Agenda 排程引擎封裝與 API
-│       ├── timeParser.js       # NLP 口語時間解析器 (呼叫 LLM)
-│       ├── jobDefinitions.js   # Agenda 任務行為定義 (發送 DM 私訊)
-│       └── reminderTemplates.js # 女僕風格提醒訊息模板 (含時區格式化)
+├── src/                        # TypeScript 原始碼目錄
+│   ├── index.ts                # 主程式進入點，建立 Discord Client、初始化指令註冊表與排程器
+│   ├── types/                  # 全域 TypeScript 型別定義
+│   │   └── environment.d.ts    # 環境變數強型別宣告 (process.env 型別安全)
+│   ├── commands/               # 指令模組目錄
+│   │   ├── commandsRouter.ts   # 中央指令路由器：前綴解析、全域權限檢查、非指令訊息轉發
+│   │   ├── commandsRegistry.ts # 中央指令註冊表：動態掃描載入所有指令模組
+│   │   └── core/               # 具體指令實作 (如 weather.ts, Lin.ts, gif.ts, help.ts 等)
+│   ├── databases/              # 資料庫層
+│   │   └── mongodb.ts          # MongoDB 資料庫連線管理器（單例模式）
+│   ├── services/               # 服務層
+│   │   ├── systemPrompt.ts     # 共用系統提示詞 (Lin 的角色設定)
+│   │   ├── LLM/                # AI 大腦模組
+│   │   ├── weather/            # 天氣查詢服務 (策略模式)
+│   │   └── scheduler/          # 排程提醒模組
+├── tests/                      # 單元測試與整合測試目錄
 ├── implements/                 # 功能實作規劃文件
 ├── documents/                  # 文件與說明書
+│   └── workflows.md            # 🔄 核心工作流圖表 (時序圖)
 ├── docker-compose.yml          # Docker Compose 設定（bot + MongoDB）
-├── Dockerfile                  # Docker 映像檔建置設定
-├── .dockerignore               # Docker 建置排除規則
+├── Dockerfile                  # Docker 映像檔建置設定 (Multi-stage)
+├── vitest.config.ts            # Vitest 測試框架設定檔
+├── tsconfig.json               # TypeScript 編譯器設定檔
 ├── .env                        # 環境變數設定 (不納入版控)
 ├── .gitignore                  # Git 忽略規則
 └── package.json                # 專案依賴與設定
 ```
+
+---
+
+## 🔄 核心工作流 (Workflows)
+
+如果你是後續接手的工程師，想要快速理解各個模組是如何組合在一起完成一項功能的，請務必查看我們的 **[系統核心工作流圖表](file:///c:/NKNU/Project/Barlog%20Family%20Discord%20Server/DiscordBot/LinBot/documents/workflows.md)**。裡面使用 Mermaid 時序圖詳細繪製了「指令路由」、「排程系統」、「AI 雙引擎切換」與「天氣查詢」的模組互動順序。
 
 ---
 
@@ -182,7 +182,11 @@ docker compose logs -f bot
 
 ```bash
 npm install
-node index.js
+npm run dev # 啟動開發模式 (包含熱重載)
+
+# 或是編譯後啟動正式環境：
+# npm run build
+# npm start
 ```
 
 看到以下訊息即代表成功上線：
@@ -248,9 +252,9 @@ LinBot 的 AI 對話功能由 **Ollama** (本地端) 及 **Google Gemini** (雲�
 
 ### 1. 建立指令檔案
 
-在 `commands/` 目錄下建立新的 `.js` 檔案（例如 `play.js`），匯出一個符合標準結構的配置物件：
+在 `src/commands/core/` 目錄下建立新的 `.ts` 檔案（例如 `play.ts`），匯出一個符合標準結構的配置物件：
 
-```javascript
+```typescript
 export const play = {
     name: "play",
     description: "播放音樂。",
@@ -267,11 +271,11 @@ export const play = {
 
 ### 2. 完成！
 
-- 指令會在下次啟動時被 `commandsRegistry.js` **自動掃描並載入**
+- 指令會在下次啟動時被 `commandsRegistry.ts` **自動掃描並載入**
 - `>help` 選單會**自動顯示**新指令的名稱與說明
-- `commandsRouter.js` 會**自動處理**權限驗證（`ownerOnly`、`dmAllowed`）
+- `commandsRouter.ts` 會**自動處理**權限驗證（`ownerOnly`、`dmAllowed`）
 
-> ⚠️ **注意**：如果使用了新的 `category`（例如 `"music"`），需要在 `help.js` 的 `CATEGORY_CONFIG` 和 `CATEGORY_ORDER` 中新增對應的分類設定，否則 `>help` 會顯示除錯警告。
+> ⚠️ **注意**：如果使用了新的 `category`（例如 `"music"`），需要在 `help.ts` 的 `CATEGORY_CONFIG` 和 `CATEGORY_ORDER` 中新增對應的分類設定，否則 `>help` 會顯示除錯警告。
 
 ---
 
@@ -314,7 +318,9 @@ Ollama 的回應速度取決於你的硬體規格與使用的模型大小。建�
 | `@google/genai` | ^1.47.0 | Google Gemini AI SDK |
 | `agenda` | ^6.2.4 | 基於 MongoDB 的定時任務與非同步工作排程器 |
 | `mongodb` | ^7.1.1 | MongoDB 官方資料庫驅動程式 |
-| `@agendajs/mongo-backend` | ^4.0.1 | Agenda 的 MongoDB 後端儲存庫連線器 |
+| `typescript` | ^5.7.3 | 程式語言編譯器 |
+| `tsx` | ^4.19.2 | 開發環境 Node.js 與 TypeScript 執行器 |
+| `vitest` | ^3.2.0 | TDD 策略測試框架 |
 
 ---
 

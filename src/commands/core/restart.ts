@@ -1,5 +1,5 @@
 import type { Message } from "discord.js";
-import type { BotCommand } from "./commandTypes.js";
+import type { BotCommand } from "../commandTypes.js";
 
 
 // 機器人重啟指令

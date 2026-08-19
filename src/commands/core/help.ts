@@ -6,8 +6,8 @@
 
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import type { Message } from "discord.js";
-import { getCommands } from "./commandsRegistry.js";
-import type { BotCommand, CommandCategory } from "./commandTypes.js";
+import { getCommands } from "../commandsRegistry.js";
+import type { BotCommand, CommandCategory } from "../commandTypes.js";
 
 
 // ═══════════════════════════════════════════

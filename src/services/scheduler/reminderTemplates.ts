@@ -127,12 +127,13 @@ export function formatReminderListEmbed(reminders: ReminderInfo[], username: str
     embed.setDescription(`共有 **${reminders.length}** 個待執行提醒：`);
 
     for (const r of reminders) {
-        // 轉換為台灣時間顯示
-        const taiwanTime = new Date(new Date(r.scheduledAt!).getTime() + (8 * 60 * 60 * 1000)); // 需要修改成可彈性化時間
-        const formatted = taiwanTime.toLocaleString("zh-TW", {
+        const scheduledDate = new Date(r.scheduledAt!);
+        const formatted = scheduledDate.toLocaleString("zh-TW", {
             timeZone: timeZone,
-            month: "2-digit", day: "2-digit",
-            hour: "2-digit", minute: "2-digit",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
             hour12: false,
         });
 

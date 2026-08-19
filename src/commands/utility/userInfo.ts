@@ -1,6 +1,6 @@
 import { EmbedBuilder } from "discord.js";
 import type { Message, GuildMember } from "discord.js";
-import type { BotCommand } from "./commandTypes.js";
+import type { BotCommand } from "../commandTypes.js";
 
 export const userInfo: BotCommand = {
     name: "userInfo",

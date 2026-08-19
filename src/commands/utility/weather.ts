@@ -5,10 +5,10 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import type { Message } from "discord.js";
-import type { BotCommand } from "./commandTypes.js";
-import { queryWeather } from "../services/weather/weatherRouter.js";
-import { formatWeatherOverviewEmbed, formatWeatherDetailEmbed } from "../services/weather/weatherFormatter.js";
-import type { WeatherDetailItem } from "../services/weather/weatherTypes.js";
+import type { BotCommand } from "../commandTypes.js";
+import { queryWeather } from "../../services/weather/weatherRouter.js";
+import { formatWeatherOverviewEmbed, formatWeatherDetailEmbed } from "../../services/weather/weatherFormatter.js";
+import type { WeatherDetailItem } from "../../services/weather/weatherTypes.js";
 
 
 export const weather: BotCommand = {

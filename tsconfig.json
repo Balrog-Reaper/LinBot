@@ -4,23 +4,31 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-
     // ── 嚴格型別檢查 ──
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
-
     // ── 輸出與根目錄設定 ──
     "outDir": "./dist",
     "rootDir": "./src",
     "declaration": true,
     "sourceMap": true,
-
     // ── 模組相容性 ──
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": [
+      "vitest/globals"
+    ]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "scratch"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "scratch",
+    "tests",
+    "**/*.test.ts"
+  ]
 }
